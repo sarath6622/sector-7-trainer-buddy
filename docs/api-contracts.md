@@ -58,10 +58,14 @@ Serialization: superjson
 
 | Procedure | Type | Auth | Input | Output |
 |-----------|------|------|-------|--------|
-| `workout.list` | query | protected | `{ clientId?, page?, limit? }` | `{ logs: WorkoutLog[], total: number }` |
-| `workout.getById` | query | protected | `{ id: string }` | `WorkoutLog` with exercises |
-| `workout.create` | mutation | trainerProcedure | `{ clientId, name, scheduledAt?, exercises: [...] }` | `WorkoutLog` |
-| `workout.complete` | mutation | clientProcedure | `{ id: string, sets: [...] }` | `WorkoutLog` |
+| `workout.list` | query | `clientProcedure` | `{ clientId?, status?: WorkoutStatus, page?, limit? }` | `{ workouts: WorkoutLog[], total, page, totalPages }` — CLIENT sees only own logs; TRAINER sees only their mapped clients |
+| `workout.getById` | query | `clientProcedure` | `{ id: string }` | `WorkoutLog` with full exercise + set detail — ownership-checked |
+| `workout.assign` | mutation | `trainerProcedure` | `{ clientId, title, notes?, scheduledAt?, exercises: [...] }` | `WorkoutLog` with `status: ASSIGNED` — fires `PROGRAM_ASSIGNED` notification to client |
+| `workout.log` | mutation | `clientProcedure` | `{ title?, notes?, durationMin?, exercises: [...] }` | `WorkoutLog` with `status: COMPLETED` (client self-log) |
+| `workout.complete` | mutation | `clientProcedure` | `{ id, durationMin?, notes?, exercises: [...] }` | `WorkoutLog` — transitions `ASSIGNED → COMPLETED`; replaces set data atomically; fires `ACHIEVEMENT` on streak milestone |
+| `workout.delete` | mutation | `trainerProcedure` | `{ id: string }` | `{ success: true }` — throws `CONFLICT` if status is `COMPLETED` |
+| `workout.getStats` | query | `clientProcedure` | — | `{ streak, weeklyCount, totalWorkouts, lastWorkout }` |
+| `workout.getTrainerOverview` | query | `trainerProcedure` | — | `{ clients: [{ clientProfileId, name, image, recentWorkouts }] }` |
 
 ---
 

@@ -1,4 +1,4 @@
-import type { UserRole, MuscleGroup, ExerciseCategory, Equipment } from '@/generated/prisma/enums';
+import type { UserRole, MuscleGroup, ExerciseCategory, Equipment, TrainerSpecialty } from '@/generated/prisma/enums';
 
 export const APP_NAME = 'Sector 7';
 export const APP_DESCRIPTION = 'Comprehensive fitness management platform';
@@ -13,14 +13,17 @@ export const NAV_ITEMS: Record<UserRole, Array<{ label: string; href: string; ic
   ADMIN: [
     { label: 'Dashboard', href: '/admin', icon: 'LayoutDashboard' },
     { label: 'Users', href: '/admin/users', icon: 'Users' },
+    { label: 'Trainers', href: '/admin/trainers', icon: 'UserCheck' },
     { label: 'Exercises', href: '/admin/exercises', icon: 'Dumbbell' },
     { label: 'Challenges', href: '/admin/challenges', icon: 'Trophy' },
   ],
   TRAINER: [
     { label: 'Dashboard', href: '/trainer', icon: 'LayoutDashboard' },
     { label: 'Clients', href: '/trainer/clients', icon: 'Users' },
-    { label: 'Exercises', href: '/trainer/exercises', icon: 'Dumbbell' },
+    { label: 'Workouts', href: '/trainer/workouts', icon: 'Dumbbell' },
+    { label: 'Exercises', href: '/trainer/exercises', icon: 'Library' },
     { label: 'Schedule', href: '/trainer/schedule', icon: 'Calendar' },
+    { label: 'Profile', href: '/trainer/profile', icon: 'User' },
   ],
   CLIENT: [
     { label: 'Dashboard', href: '/client', icon: 'LayoutDashboard' },
@@ -28,6 +31,7 @@ export const NAV_ITEMS: Record<UserRole, Array<{ label: string; href: string; ic
     { label: 'Exercises', href: '/client/exercises', icon: 'Library' },
     { label: 'Habits', href: '/client/habits', icon: 'Heart' },
     { label: 'Community', href: '/client/community', icon: 'Users' },
+    { label: 'Profile', href: '/client/profile', icon: 'User' },
   ],
 };
 
@@ -75,4 +79,30 @@ export const EXERCISE_CATEGORY_LABELS: Record<ExerciseCategory, string> = {
   BALANCE: 'Balance',
   PLYOMETRIC: 'Plyometric',
   COMPOUND: 'Compound',
+};
+
+// Display labels for the TrainerSpecialty enum — used in profile forms and admin UI
+export const TRAINER_SPECIALTY_LABELS: Record<TrainerSpecialty, string> = {
+  WEIGHT_LOSS: 'Weight Loss',
+  MUSCLE_GAIN: 'Muscle Gain',
+  POWERLIFTING: 'Powerlifting',
+  CROSSFIT: 'CrossFit',
+  YOGA: 'Yoga',
+  REHABILITATION: 'Rehabilitation',
+  NUTRITION: 'Nutrition',
+  CARDIO: 'Cardio',
+  FLEXIBILITY: 'Flexibility',
+  SPORTS_PERFORMANCE: 'Sports Performance',
+};
+
+// Display labels for client fitness goals — used in profile form and client cards
+export const FITNESS_GOAL_LABELS: Record<string, string> = {
+  LOSE_WEIGHT: 'Lose Weight',
+  BUILD_MUSCLE: 'Build Muscle',
+  IMPROVE_ENDURANCE: 'Improve Endurance',
+  INCREASE_FLEXIBILITY: 'Increase Flexibility',
+  BUILD_STRENGTH: 'Build Strength',
+  IMPROVE_HEALTH: 'Improve Overall Health',
+  SPORT_PERFORMANCE: 'Sport Performance',
+  OTHER: 'Other',
 };

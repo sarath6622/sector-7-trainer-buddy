@@ -101,37 +101,57 @@ model User {
 // PROFILE MODELS
 // ============================================================
 
-model TrainerProfile {
-  id             String   @id @default(cuid())
-  userId         String   @unique
-  specialties    String[] @default([])
-  bio            String?  @db.Text
-  certifications String[] @default([])
-  status         String   @default("active")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+// Structured specialty tags replace free-text so admins can filter trainers by skill
+enum TrainerSpecialty {
+  WEIGHT_LOSS
+  MUSCLE_GAIN
+  POWERLIFTING
+  CROSSFIT
+  YOGA
+  REHABILITATION
+  NUTRITION
+  CARDIO
+  FLEXIBILITY
+  SPORTS_PERFORMANCE
+}
 
-  user               User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+model TrainerProfile {
+  id               String            @id @default(cuid())
+  userId           String            @unique
+  // Structured specialty enum for admin filtering (replaces free-text strings)
+  specialties      TrainerSpecialty[] @default([])
+  bio              String?           @db.Text
+  certifications   String[]          @default([])
+  experience       Int?              // Years of professional experience
+  status           String            @default("active")
+  // Tracks whether the trainer has completed their onboarding profile form
+  profileCompleted Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   availabilityBlocks TrainerAvailability[]
-  clientMappings     TrainerClientMapping[]  @relation("TrainerMappings")
+  clientMappings     TrainerClientMapping[] @relation("TrainerMappings")
 
   @@index([userId])
 }
 
 model ClientProfile {
-  id                String   @id @default(cuid())
-  userId            String   @unique
+  id                String            @id @default(cuid())
+  userId            String            @unique
   dateOfBirth       DateTime?
   gender            String?
   heightCm          Float?
   weightKg          Float?
-  fitnessGoals      String[] @default([])
+  fitnessGoals      String[]          @default([])
   preferredSchedule Json?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  // Tracks whether the client has completed their onboarding profile form
+  profileCompleted  Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
-  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trainerMappings TrainerClientMapping[]  @relation("ClientMappings")
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainerMappings TrainerClientMapping[] @relation("ClientMappings")
   workoutLogs     WorkoutLog[]
   habits          Habit[]
 
@@ -268,15 +288,27 @@ model Exercise {
 // WORKOUT LOGGING
 // ============================================================
 
+// Tracks lifecycle of a workout: trainer assigns → client logs sets → completes
+enum WorkoutStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
 model WorkoutLog {
-  id          String   @id @default(cuid())
-  clientId    String
-  date        DateTime @default(now())
-  title       String?
-  notes       String?  @db.Text
-  durationMin Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                  String        @id @default(cuid())
+  clientId            String
+  date                DateTime      @default(now())
+  title               String?
+  notes               String?       @db.Text
+  durationMin         Int?
+  // ASSIGNED = trainer-created template; null assignedByTrainerId = client self-log
+  status              WorkoutStatus @default(ASSIGNED)
+  assignedByTrainerId String?
+  scheduledAt         DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
   client    ClientProfile     @relation(fields: [clientId], references: [id], onDelete: Cascade)
   exercises WorkoutExercise[]
@@ -284,6 +316,7 @@ model WorkoutLog {
   @@index([clientId])
   @@index([date])
   @@index([clientId, date])
+  @@index([clientId, status])
 }
 
 model WorkoutExercise {

@@ -89,13 +89,44 @@ pusher-js client attempts to subscribe to 'private-user-{userId}'
 
 ---
 
-## 6. Data Write Flow (typical mutation)
+## 7. Trainer Assigns Workout
 
 ```
-Client calls trpc.{router}.{action}.useMutation()
-  → Optimistic update (optional) via TanStack Query
-  → tRPC handler: validates input with Zod schema
-  → Prisma mutation via db singleton
-  → On success: return updated entity
-  → Client: invalidate related queries → UI re-renders
+Trainer submits AssignWorkoutForm:
+  trpc.workout.assign.mutate({ clientId, title, exercises, ... })
+    → trainerProcedure: verifies TRAINER or ADMIN role
+    → WorkoutService.canTrainerAccessClient(trainerUserId, clientId)
+        → db.trainerClientMapping.findFirst({ isActive: true })
+        → throws FORBIDDEN if no active mapping
+    → db.workoutLog.create({ status: 'ASSIGNED', assignedByTrainerId, ... })
+        → nested create: WorkoutExercise + WorkoutSet rows
+    → NotificationService.send({ type: 'PROGRAM_ASSIGNED', userId: client.userId })
+        → 3-channel delivery: DB persist + Pusher + FCM
+    → Return: WorkoutLog with exercises
+```
+
+---
+
+## 8. Client Completes Workout
+
+```
+Client submits WorkoutLogger (assigned):
+  trpc.workout.complete.mutate({ id, exercises, durationMin })
+    → clientProcedure: verifies authenticated
+    → db.clientProfile.findUnique → verify ownership (workoutLog.clientId === profile.id)
+    → Guard: throws BAD_REQUEST if status is already COMPLETED or SKIPPED
+    → db.$transaction:
+        → workoutSet.deleteMany (old target sets)
+        → workoutExercise.deleteMany (old target exercises)
+        → workoutLog.update({ status: 'COMPLETED', date: now, exercises: create })
+    → WorkoutService.calculateStreak(clientProfileId)
+        → if streak hits 7 or 30: NotificationService.send({ type: 'ACHIEVEMENT' })
+    → Return: updated WorkoutLog
+
+Client submits WorkoutLogger (self-log):
+  trpc.workout.log.mutate({ title, exercises, durationMin })
+    → clientProcedure
+    → db.workoutLog.create({ status: 'COMPLETED', assignedByTrainerId: null })
+    → streak check → optional ACHIEVEMENT notification
+    → Return: WorkoutLog
 ```
