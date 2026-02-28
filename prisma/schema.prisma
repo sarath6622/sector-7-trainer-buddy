@@ -1,0 +1,487 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// AUTH.JS REQUIRED MODELS
+// ============================================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================================
+// CORE USER MODEL
+// ============================================================
+
+enum UserRole {
+  ADMIN
+  TRAINER
+  CLIENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+}
+
+model User {
+  id            String     @id @default(cuid())
+  name          String?
+  email         String     @unique
+  emailVerified DateTime?
+  passwordHash  String?
+  image         String?
+  role          UserRole   @default(CLIENT)
+  status        UserStatus @default(ACTIVE)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+
+  trainerProfile TrainerProfile?
+  clientProfile  ClientProfile?
+
+  createdExercises Exercise[]
+  notifications    Notification[]
+  fcmTokens        FcmToken[]
+
+  leaderboardEntries      LeaderboardEntry[]
+  challengeParticipations ChallengeParticipant[]
+  auditLogs               AuditLog[]
+
+  @@index([email])
+  @@index([role])
+}
+
+// ============================================================
+// PROFILE MODELS
+// ============================================================
+
+model TrainerProfile {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  specialties    String[] @default([])
+  bio            String?  @db.Text
+  certifications String[] @default([])
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user               User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  availabilityBlocks TrainerAvailability[]
+  clientMappings     TrainerClientMapping[]  @relation("TrainerMappings")
+
+  @@index([userId])
+}
+
+model ClientProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  dateOfBirth       DateTime?
+  gender            String?
+  heightCm          Float?
+  weightKg          Float?
+  fitnessGoals      String[] @default([])
+  preferredSchedule Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainerMappings TrainerClientMapping[]  @relation("ClientMappings")
+  workoutLogs     WorkoutLog[]
+  habits          Habit[]
+
+  @@index([userId])
+}
+
+// ============================================================
+// TRAINER-CLIENT MAPPING
+// ============================================================
+
+enum MappingType {
+  PRIMARY
+  TEMPORARY
+}
+
+model TrainerClientMapping {
+  id        String      @id @default(cuid())
+  trainerId String
+  clientId  String
+  type      MappingType @default(PRIMARY)
+  isPrimary Boolean     @default(false)
+  startDate DateTime    @default(now())
+  endDate   DateTime?
+  reason    String?
+  isActive  Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  trainer TrainerProfile @relation("TrainerMappings", fields: [trainerId], references: [id], onDelete: Cascade)
+  client  ClientProfile  @relation("ClientMappings", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([trainerId])
+  @@index([clientId])
+  @@index([isActive])
+}
+
+model TrainerAvailability {
+  id        String   @id @default(cuid())
+  trainerId String
+  startDate DateTime
+  endDate   DateTime
+  reason    String?
+  isBlocked Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  trainer TrainerProfile @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  @@index([trainerId])
+  @@index([startDate, endDate])
+}
+
+// ============================================================
+// EXERCISE LIBRARY
+// ============================================================
+
+enum MuscleGroup {
+  CHEST
+  BACK
+  SHOULDERS
+  BICEPS
+  TRICEPS
+  FOREARMS
+  QUADRICEPS
+  HAMSTRINGS
+  GLUTES
+  CALVES
+  ABS
+  OBLIQUES
+  TRAPS
+  LATS
+  FULL_BODY
+  CARDIO
+}
+
+enum ExerciseCategory {
+  HYPERTROPHY
+  STRENGTH
+  CARDIO
+  FLEXIBILITY
+  BALANCE
+  PLYOMETRIC
+  COMPOUND
+}
+
+enum DifficultyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+// Predefined equipment list ensures consistent filtering across the library
+enum Equipment {
+  BARBELL
+  DUMBBELL
+  CABLE_MACHINE
+  SMITH_MACHINE
+  RESISTANCE_BAND
+  KETTLEBELL
+  BODYWEIGHT
+  PULLUP_BAR
+  BENCH
+  CARDIO_MACHINE
+  OTHER
+}
+
+model Exercise {
+  id               String           @id @default(cuid())
+  name             String           @unique
+  description      String?          @db.Text
+  instructions     String?          @db.Text
+  primaryMuscle    MuscleGroup
+  secondaryMuscles MuscleGroup[]    @default([])
+  equipment        Equipment?
+  category         ExerciseCategory
+  difficulty       DifficultyLevel  @default(INTERMEDIATE)
+  // mediaType is auto-detected from mediaUrl: 'image' | 'video' | 'youtube'
+  mediaUrl         String?
+  mediaType        String?
+  createdById      String
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  createdBy        User              @relation(fields: [createdById], references: [id])
+  workoutExercises WorkoutExercise[]
+
+  @@index([primaryMuscle])
+  @@index([category])
+  @@index([equipment])
+  @@index([name])
+  @@index([createdById])
+}
+
+// ============================================================
+// WORKOUT LOGGING
+// ============================================================
+
+model WorkoutLog {
+  id          String   @id @default(cuid())
+  clientId    String
+  date        DateTime @default(now())
+  title       String?
+  notes       String?  @db.Text
+  durationMin Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client    ClientProfile     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  exercises WorkoutExercise[]
+
+  @@index([clientId])
+  @@index([date])
+  @@index([clientId, date])
+}
+
+model WorkoutExercise {
+  id           String  @id @default(cuid())
+  workoutLogId String
+  exerciseId   String
+  orderIndex   Int     @default(0)
+  notes        String?
+
+  workoutLog WorkoutLog  @relation(fields: [workoutLogId], references: [id], onDelete: Cascade)
+  exercise   Exercise    @relation(fields: [exerciseId], references: [id])
+  sets       WorkoutSet[]
+
+  @@index([workoutLogId])
+  @@index([exerciseId])
+}
+
+model WorkoutSet {
+  id                String  @id @default(cuid())
+  workoutExerciseId String
+  setNumber         Int
+  reps              Int?
+  weightKg          Float?
+  rpe               Int?
+  durationSec       Int?
+  restSec           Int?
+  isWarmup          Boolean @default(false)
+  isDropSet         Boolean @default(false)
+
+  workoutExercise WorkoutExercise @relation(fields: [workoutExerciseId], references: [id], onDelete: Cascade)
+
+  @@index([workoutExerciseId])
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+enum NotificationType {
+  WORKOUT_REMINDER
+  TRAINER_MESSAGE
+  PROGRAM_ASSIGNED
+  MISSED_WORKOUT
+  TRAINER_UNAVAILABLE
+  CHALLENGE_UPDATE
+  ACHIEVEMENT
+  STREAK_REMINDER
+  SYSTEM_ANNOUNCEMENT
+  ASSIGNMENT_CHANGE
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  data      Json?
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+model FcmToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  device    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ============================================================
+// HABITS
+// ============================================================
+
+enum HabitType {
+  WATER
+  SLEEP
+  STEPS
+  PROTEIN
+  CALORIES
+  CUSTOM
+}
+
+model Habit {
+  id        String    @id @default(cuid())
+  clientId  String
+  type      HabitType
+  label     String?
+  date      DateTime  @db.Date
+  value     Float
+  unit      String?
+  notes     String?
+  createdAt DateTime  @default(now())
+
+  client ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, type, date])
+  @@index([clientId])
+  @@index([clientId, date])
+}
+
+// ============================================================
+// COMMUNITY: CHALLENGES & LEADERBOARDS
+// ============================================================
+
+enum ChallengeType {
+  WORKOUT_COUNT
+  TOTAL_VOLUME
+  STREAK
+  HABIT_CONSISTENCY
+  CUSTOM
+}
+
+enum ChallengeStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model Challenge {
+  id          String          @id @default(cuid())
+  name        String
+  description String?         @db.Text
+  type        ChallengeType
+  status      ChallengeStatus @default(DRAFT)
+  startDate   DateTime
+  endDate     DateTime
+  rules       Json?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  participants ChallengeParticipant[]
+  leaderboard  LeaderboardEntry[]
+
+  @@index([status])
+  @@index([startDate, endDate])
+}
+
+model ChallengeParticipant {
+  id          String   @id @default(cuid())
+  challengeId String
+  userId      String
+  joinedAt    DateTime @default(now())
+  optedOut    Boolean  @default(false)
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@index([challengeId])
+  @@index([userId])
+}
+
+model LeaderboardEntry {
+  id          String   @id @default(cuid())
+  challengeId String
+  userId      String
+  score       Float    @default(0)
+  rank        Int?
+  updatedAt   DateTime @updatedAt
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@index([challengeId, score])
+}
+
+// ============================================================
+// AUDIT LOG
+// ============================================================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  entity    String
+  entityId  String
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
