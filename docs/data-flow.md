@@ -130,3 +130,74 @@ Client submits WorkoutLogger (self-log):
     → streak check → optional ACHIEVEMENT notification
     → Return: WorkoutLog
 ```
+
+---
+
+## 9. Admin Creates a User Account
+
+```
+Admin submits CreateUserDialog (name, email, password, role):
+  trpc.user.create.mutate({ name, email, password, role })
+    → adminProcedure: ADMIN only
+    → db.user.findUnique({ email }) — throws CONFLICT if duplicate
+    → bcrypt.hash(password, 12)
+    → db.user.create({ role, passwordHash, status: 'ACTIVE' })
+        → nested create: trainerProfile: {} OR clientProfile: {}
+          (one atomic DB call — profile stub exists immediately)
+    → User can now log in with provided credentials
+    → Admin Users page refetches user.list
+```
+
+---
+
+## 10. Admin Assigns a Trainer to a Client
+
+```
+Admin submits AssignClientDialog (trainerId, clientId, type):
+  trpc.trainer.assignClient.mutate({ trainerId, clientId, type })
+    → adminProcedure: ADMIN only
+    → Guard: db.trainerClientMapping.findFirst({ trainerId, clientId, isActive: true })
+        → throws CONFLICT if duplicate active mapping found
+    → db.trainerClientMapping.create({ trainerId, clientId, type, isPrimary, isActive: true })
+        → include: client.user, trainer.user (for notification payload)
+    → NotificationService.send({ userId: client.user.id, type: 'PROGRAM_ASSIGNED' })
+        — fire-and-forget (.catch logged) so Pusher failure never kills the mutation
+    → Return: { id, trainerId, clientId, type, isActive }
+    → Admin Trainers page refetches trainer.getMappings + trainer.listAll
+```
+
+---
+
+## 11. Client Views Their Assigned Trainer
+
+```
+Client visits /client/profile:
+  trpc.profile.getMyTrainer.useQuery()
+    → clientProcedure
+    → db.clientProfile.findUnique({ userId }) — returns null if no profile
+    → db.trainerClientMapping.findFirst({
+        clientId: profile.id,
+        isActive: true,
+        type: 'PRIMARY'
+      })
+      — returns null if no active primary mapping
+    → If mapping found: return trainer card { name, image, bio, experience, specialties }
+    → Rendered as "Your Trainer" card at top of /client/profile page
+```
+
+---
+
+## 12. Trainer Completes Profile
+
+```
+Trainer submits /trainer/profile form:
+  trpc.trainer.updateProfile.mutate({ bio, specialties, certifications, experience })
+    → trainerProcedure: TRAINER or ADMIN
+    → db.trainerProfile.upsert({
+        where: { userId },
+        create: { userId, bio, specialties, certifications, experience, profileCompleted: true },
+        update: { bio, specialties, certifications, experience, profileCompleted: true }
+      })
+    → profileCompleted flag flips to true — Admin Users page Profile column shows "Complete"
+```
+

@@ -35,10 +35,11 @@ Serialization: superjson
 
 | Procedure | Type | Auth | Input | Output |
 |-----------|------|------|-------|--------|
-| `user.list` | query | admin | `{ page?, limit?, role? }` | `{ users: User[], total: number }` |
-| `user.getById` | query | admin | `{ id: string }` | `User` |
-| `user.updateStatus` | mutation | admin | `{ id: string, status: 'ACTIVE'\|'INACTIVE'\|'SUSPENDED' }` | `User` |
-| `user.updateProfile` | mutation | protected | `{ name?, phone?, timezone?, language? }` | `User` |
+| `user.list` | query | admin | `{ page?, limit?, role?, search? }` | `{ users: User[], total, page, totalPages }` — `role` and `search` accept `null` (`.nullish()`) |
+| `user.getById` | query | protected | `{ id: string }` | `User` with `trainerProfile` + `clientProfile` |
+| `user.create` | mutation | admin | `{ name, email, password, role: 'TRAINER'\|'CLIENT' }` | `User` — creates role-appropriate profile stub atomically; throws `CONFLICT` on duplicate email |
+| `user.updateStatus` | mutation | admin | `{ id: string, status: 'ACTIVE'\|'INACTIVE'\|'SUSPENDED' }` | `{ id, status }` — throws `NOT_FOUND` |
+| `user.deactivate` | mutation | admin | `{ id: string }` | `{ id, status }` — sets `INACTIVE`; throws `BAD_REQUEST` if target is self |
 
 ---
 
@@ -83,9 +84,25 @@ Serialization: superjson
 
 | Procedure | Type | Auth | Input | Output |
 |-----------|------|------|-------|--------|
-| `trainer.getClients` | query | trainerProcedure | — | `ClientProfile[]` |
-| `trainer.getAvailability` | query | trainerProcedure | — | `TrainerAvailability[]` |
-| `trainer.setAvailability` | mutation | trainerProcedure | `{ slots: { dayOfWeek, startTime, endTime }[] }` | `TrainerAvailability[]` |
+| `trainer.getMyProfile` | query | trainerProcedure | — | `TrainerProfile` — upserts stub if missing |
+| `trainer.updateProfile` | mutation | trainerProcedure | `{ bio?, specialties?: TrainerSpecialty[], certifications?: string[], experience?: number }` | `TrainerProfile` — sets `profileCompleted: true` |
+| `trainer.getClients` | query | trainerProcedure | — | `ClientRoster[]` — returns `[]` if no profile; each row includes `lastWorkout` |
+| `trainer.getClientDetail` | query | trainerProcedure | `{ clientProfileId: string }` | `ClientProfile` with recent workouts — throws `FORBIDDEN` if not mapped |
+| `trainer.listAll` | query | adminProcedure | — | `TrainerProfile[]` with `user`, `specialties`, `clientMappings` count |
+| `trainer.getMappings` | query | adminProcedure | `{ activeOnly?: boolean, page?, limit? }` | `{ mappings, total, page, totalPages }` |
+| `trainer.assignClient` | mutation | adminProcedure | `{ trainerId, clientId, type: 'PRIMARY'\|'TEMPORARY', reason? }` | `{ id, trainerId, clientId, type, isActive }` — throws `CONFLICT` on duplicate active mapping; fires `PROGRAM_ASSIGNED` notification (non-blocking) |
+| `trainer.removeAssignment` | mutation | adminProcedure | `{ mappingId: string, reason? }` | `TrainerClientMapping` — soft-deactivates; throws `NOT_FOUND` / `BAD_REQUEST` if already inactive |
+
+---
+
+### `profile` router
+
+| Procedure | Type | Auth | Input | Output |
+|-----------|------|------|-------|--------|
+| `profile.getMyClientProfile` | query | clientProcedure | — | `ClientProfile` — upserts stub if missing |
+| `profile.updateClient` | mutation | clientProcedure | `{ dateOfBirth?, gender?, heightCm?, weightKg?, fitnessGoals?: string[] }` | `ClientProfile` — sets `profileCompleted: true` |
+| `profile.getMyTrainer` | query | clientProcedure | — | trainer card `{ name, image, bio, experience, specialties }` or `null` if no active PRIMARY mapping |
+| `profile.getClientProfile` | query | trainerProcedure | `{ clientProfileId: string }` | `ClientProfile` with `user` — throws `NOT_FOUND` / `FORBIDDEN` if not mapped |
 
 ---
 

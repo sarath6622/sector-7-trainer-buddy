@@ -9,6 +9,15 @@ AI assistants: add entries under `[Unreleased]` for every modification per CLAUD
 
 ## [Unreleased]
 
+### Added
+- Coming-soon stub pages for all unimplemented nav routes: `/trainer/schedule`, `/client/habits`, `/client/community`, `/admin/challenges` — prevents 404 (`src/app/(dashboard)/*/*/page.tsx`)
+- Shared `ComingSoonPage` component with animated ping badge and back-navigation (`src/components/shared/coming-soon-page.tsx`)
+
+### Changed (Docs — per AI Coding Rules)
+- `docs/api-contracts.md` — replaced stale `trainer` router table with all 8 Sprint 4 procedures; added full `profile` router section (4 procedures); updated `user` router with `create`, `updateStatus`, `deactivate`, and `search` additions
+- `docs/data-flow.md` — appended flows 9–12: admin creates user, admin assigns trainer to client, client views their trainer card, trainer completes profile
+- `docs/architecture.md` — updated layer map (added `profile` router, `WorkoutService`, sub-page lists per role), added `TrainerClientMapping` design notes, added `profileCompleted` onboarding pattern documentation, corrected model count to 19
+
 ### Fixed
 - `user.list` returning 500 when `role` or `search` were unset — tRPC serializes unset React state as `null` but Zod `.optional()` only accepts `undefined`; changed both fields to `.nullish()` (`src/server/trpc/routers/user.ts`)
 - `AssignClientDialog` was passing `User.id` as `clientId` to `trainer.assignClient` which expects `ClientProfile.id` — fixed to use `u.clientProfile?.id`; clients without a profile stub are now disabled in the list with a "No profile" label (`src/components/admin/assign-client-dialog.tsx`)

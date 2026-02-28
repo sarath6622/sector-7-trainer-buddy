@@ -19,9 +19,9 @@ Browser / Mobile PWA
   ├── Next.js App Router (src/app/)
   │     ├── (auth)/          — /login, /register  [public]
   │     ├── (dashboard)/     — shared shell layout
-  │     │     ├── admin/     — ADMIN only
-  │     │     ├── trainer/   — TRAINER only
-  │     │     └── client/    — CLIENT only
+  │     │     ├── admin/     — ADMIN only (dashboard, users, trainers, exercises, challenges)
+  │     │     ├── trainer/   — TRAINER only (dashboard, clients, workouts, exercises, profile, schedule)
+  │     │     └── client/    — CLIENT only (dashboard, workouts, exercises, habits, community, profile)
   │     ├── api/
   │     │     ├── auth/[...nextauth]/  — NextAuth.js handler
   │     │     ├── pusher/auth/         — Pusher channel authorization
@@ -32,20 +32,23 @@ Browser / Mobile PWA
   ├── tRPC Routers (src/server/trpc/)
   │     ├── init.ts           — context, procedure builders
   │     └── routers/          — auth, user, exercise, workout,
-  │                              notification, trainer, habit, challenge
+  │                              notification, trainer, profile,
+  │                              habit, challenge
   │
   ├── Service Layer (src/server/services/)
   │     ├── notification.service.ts  — triple-channel delivery
+  │     ├── workout.service.ts       — streak, volume, access-control logic
   │     └── fcm.service.ts           — FCM token mgmt + push
   │
   ├── Data Layer
   │     ├── src/lib/db.ts     — Prisma singleton (adapter-pg)
-  │     └── prisma/schema.prisma  — 18 models
+  │     └── prisma/schema.prisma  — 19 models
   │
   └── Client State (src/stores/)
         ├── use-notification-store.ts  — unread count + list
         └── use-sidebar-store.ts       — sidebar open/closed
 ```
+
 
 ---
 
@@ -82,7 +85,24 @@ Key model groups:
 - **Engagement**: Habit, Challenge, ChallengeParticipant, LeaderboardEntry
 - **Ops**: Notification, FcmToken, AuditLog
 
----
+### TrainerClientMapping design
+
+- `isActive: boolean` — soft-delete pattern; deactivated mappings are archived, not deleted
+- `type: 'PRIMARY' | 'TEMPORARY'` — only PRIMARY mappings appear in the client's "Your Trainer" card
+- `isPrimary: boolean` — denormalized from `type` for direct query filtering
+- Unique guard enforced in `trainer.assignClient` procedure (not DB constraint) to allow re-assignment after removal
+
+### Profile Onboarding Pattern
+
+Both `TrainerProfile.profileCompleted` and `ClientProfile.profileCompleted` default to `false`.  
+They flip to `true` only when the user explicitly submits their profile form:
+- Trainer: `trainer.updateProfile` → `/trainer/profile`
+- Client: `profile.updateClient` → `/client/profile`
+
+Admin Users page reads this flag for the "Profile" column (Pending → Complete).  
+Profile stubs are auto-created when admin creates a user via `user.create` (or on first `getMyProfile`/`getMyClientProfile` query via upsert).
+
+
 
 ## Notification System (Triple-channel)
 
