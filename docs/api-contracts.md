@@ -127,9 +127,14 @@ Types: `HabitType = WATER | SLEEP | STEPS | PROTEIN | CALORIES | CUSTOM`
 
 | Procedure | Type | Auth | Input | Output |
 |-----------|------|------|-------|--------|
-| `challenge.list` | query | protected | `{ active?: boolean }` | `Challenge[]` |
-| `challenge.join` | mutation | clientProcedure | `{ challengeId: string }` | `ChallengeParticipant` |
-| `challenge.create` | mutation | trainerProcedure | `{ name, description, startDate, endDate, goal }` | `Challenge` |
+| `challenge.list` | query | protected | `{ status?: ChallengeStatus }` | `Challenge[]` with `_count.participants` and caller's `participants[0]` entry — defaults to ACTIVE when no status given |
+| `challenge.listAll` | query | admin | — | `Challenge[]` across all statuses — used by admin management page |
+| `challenge.create` | mutation | admin | `{ name, description?, type: ChallengeType, startDate, endDate, rules? }` | `Challenge` — created in DRAFT status |
+| `challenge.activate` | mutation | admin | `{ id: string }` | `Challenge` — DRAFT → ACTIVE; throws BAD_REQUEST if not DRAFT |
+| `challenge.cancel` | mutation | admin | `{ id: string }` | `Challenge` — DRAFT/ACTIVE → CANCELLED; throws BAD_REQUEST otherwise |
+| `challenge.join` | mutation | protected | `{ challengeId: string }` | `ChallengeParticipant` — upsert (re-joins if previously opted out); throws BAD_REQUEST if challenge not ACTIVE |
+| `challenge.leave` | mutation | protected | `{ challengeId: string }` | `ChallengeParticipant` — sets `optedOut: true`; throws BAD_REQUEST if not currently participating |
+| `challenge.getLeaderboard` | query | protected | `{ challengeId: string }` | `Array<{ userId, name, image, score, rank, joinedAt, isMe }>` — live scores for WORKOUT_COUNT and TOTAL_VOLUME; STREAK/HABIT_CONSISTENCY/CUSTOM return score 0 |
 
 ---
 

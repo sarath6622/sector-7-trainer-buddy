@@ -9,6 +9,17 @@ AI assistants: add entries under `[Unreleased]` for every modification per CLAUD
 
 ## [Unreleased]
 
+### Added (Sprint 11 — Challenges & Leaderboard)
+- `challenge.listAll` `adminProcedure` — returns all challenges across all statuses for the admin management page (`src/server/trpc/routers/challenge.ts`)
+- `challenge.activate` `adminProcedure` — transitions DRAFT → ACTIVE; throws BAD_REQUEST if not DRAFT (`src/server/trpc/routers/challenge.ts`)
+- `challenge.cancel` `adminProcedure` — transitions DRAFT/ACTIVE → CANCELLED (`src/server/trpc/routers/challenge.ts`)
+- `challenge.join` updated with ACTIVE-status guard; uses upsert to allow re-joining after opting out (`src/server/trpc/routers/challenge.ts`)
+- `challenge.leave` `protectedProcedure` — soft opt-out sets `optedOut=true`, preserving participation history (`src/server/trpc/routers/challenge.ts`)
+- `challenge.getLeaderboard` `protectedProcedure` — computes live scores for WORKOUT_COUNT and TOTAL_VOLUME types; returns ranked entries with `isMe` flag (`src/server/trpc/routers/challenge.ts`)
+- Admin Challenges page (`/admin/challenges`) — lists all challenges with status/type badges, participant count, Activate/Cancel buttons, and Create Challenge dialog (`src/app/(dashboard)/admin/challenges/page.tsx`)
+- Client Community page (`/client/community`) — ACTIVE challenges with join/leave buttons and collapsible leaderboard panel; 🥇🥈🥉 medals for top 3 (`src/app/(dashboard)/client/community/page.tsx`)
+- 18 unit tests for activate, cancel, join, leave, and getLeaderboard (`src/server/trpc/routers/__tests__/challenge.test.ts`)
+
 ### Added (Sprint 9 — Admin Analytics Dashboard)
 - `user.getAdminAnalytics` `adminProcedure` — returns 4 data sets in a single call: user growth (new CLIENT signups per week × 12 weeks), platform activity (completed workouts per week × 12 weeks), top 10 exercises by usage count, and per-trainer comparison (client count + completedLast30) sorted by activity (`src/server/trpc/routers/user.ts`)
 - Admin dashboard rebuilt with 4 Recharts chart panels: New Members line chart, Platform Activity bar chart, Top Exercises horizontal bar chart, and Trainer Comparison avatar list — alongside the existing 3 stat cards (`src/app/(dashboard)/admin/page.tsx`)
