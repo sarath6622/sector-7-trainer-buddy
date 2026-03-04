@@ -9,6 +9,12 @@ AI assistants: add entries under `[Unreleased]` for every modification per CLAUD
 
 ## [Unreleased]
 
+### Added (Sprint 13 — Trainer Schedule & Availability)
+- `trainer.addAvailabilityBlock` `trainerProcedure` — creates a blocked date range with optional reason; validates end > start (`src/server/trpc/routers/trainer.ts`)
+- `trainer.removeAvailabilityBlock` `trainerProcedure` — deletes an owned availability block; throws FORBIDDEN if the block belongs to a different trainer (`src/server/trpc/routers/trainer.ts`)
+- Trainer Schedule page (`/trainer/schedule`) rebuilt from ComingSoon stub — toggleable "Block Dates" form, BlockCard list with Active now / Upcoming / Past badges, summary stat cards for active+upcoming and past counts, sorted (active/upcoming chronologically first, past at bottom) (`src/app/(dashboard)/trainer/schedule/page.tsx`)
+- 12 unit tests for `addAvailabilityBlock` and `removeAvailabilityBlock` covering happy paths, date validation, ownership guard, missing profile, role guards, and UNAUTHORIZED (`src/server/trpc/routers/__tests__/trainer.availability.test.ts`)
+
 ### Fixed (Sprint 12 — Notification Inbox)
 - `NotificationBell` now fetches `notification.unreadCount` from the server on mount via `useQuery` and syncs it to the Zustand store — fixes badge showing 0 for pre-existing unread notifications (`src/components/notifications/notification-bell.tsx`)
 - `markRead` and `markAllRead` mutations now also invalidate the `notification.unreadCount` query key so the badge immediately reflects the new count after reading (`src/components/notifications/notification-center.tsx`)

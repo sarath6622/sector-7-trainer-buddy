@@ -161,6 +161,57 @@ export const trainerRouter = router({
       });
     }),
 
+  // ── Availability blocks ───────────────────────────────────────────────────────
+
+  // Adds a blocked date range to the trainer's schedule (e.g. holiday, illness)
+  addAvailabilityBlock: trainerProcedure
+    .input(
+      z.object({
+        startDate: z.string(), // ISO date string (YYYY-MM-DD)
+        endDate: z.string(),
+        reason: z.string().max(200).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const profile = await ctx.db.trainerProfile.findUnique({
+        where: { userId: ctx.session.user.id },
+        select: { id: true },
+      });
+      if (!profile) throw new TRPCError({ code: 'NOT_FOUND', message: 'Trainer profile not found' });
+
+      const start = new Date(input.startDate);
+      const end = new Date(input.endDate);
+      if (end <= start)
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'End date must be after start date' });
+
+      return ctx.db.trainerAvailability.create({
+        data: { trainerId: profile.id, startDate: start, endDate: end, reason: input.reason },
+        select: { id: true, startDate: true, endDate: true, reason: true, isBlocked: true },
+      });
+    }),
+
+  // Removes a blocked period — ownership-checked so trainers cannot delete others' blocks
+  removeAvailabilityBlock: trainerProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const profile = await ctx.db.trainerProfile.findUnique({
+        where: { userId: ctx.session.user.id },
+        select: { id: true },
+      });
+      if (!profile) throw new TRPCError({ code: 'NOT_FOUND', message: 'Trainer profile not found' });
+
+      const block = await ctx.db.trainerAvailability.findUnique({
+        where: { id: input.id },
+        select: { trainerId: true },
+      });
+      if (!block) throw new TRPCError({ code: 'NOT_FOUND', message: 'Block not found' });
+      if (block.trainerId !== profile.id)
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Not your availability block' });
+
+      await ctx.db.trainerAvailability.delete({ where: { id: input.id } });
+      return { success: true as const };
+    }),
+
   // ── Admin — roster management ─────────────────────────────────────────────────
 
   // Returns all trainer profiles for admin assignment UI

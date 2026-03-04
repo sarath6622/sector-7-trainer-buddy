@@ -99,6 +99,8 @@ Serialization: superjson
 | `trainer.getMappings` | query | adminProcedure | `{ activeOnly?: boolean, page?, limit? }` | `{ mappings, total, page, totalPages }` |
 | `trainer.assignClient` | mutation | adminProcedure | `{ trainerId, clientId, type: 'PRIMARY'\|'TEMPORARY', reason? }` | `{ id, trainerId, clientId, type, isActive }` — throws `CONFLICT` on duplicate active mapping; fires `PROGRAM_ASSIGNED` notification (non-blocking) |
 | `trainer.removeAssignment` | mutation | adminProcedure | `{ mappingId: string, reason? }` | `TrainerClientMapping` — soft-deactivates; throws `NOT_FOUND` / `BAD_REQUEST` if already inactive |
+| `trainer.addAvailabilityBlock` | mutation | trainerProcedure | `{ startDate: string, endDate: string, reason?: string (max 200) }` | `{ id, startDate, endDate, reason, isBlocked }` — throws `BAD_REQUEST` if end ≤ start; throws `NOT_FOUND` if trainer has no profile |
+| `trainer.removeAvailabilityBlock` | mutation | trainerProcedure | `{ id: string }` | `{ success: true }` — throws `NOT_FOUND` if block missing; throws `FORBIDDEN` if block belongs to a different trainer |
 
 ---
 
