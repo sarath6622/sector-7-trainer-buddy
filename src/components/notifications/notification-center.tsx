@@ -16,7 +16,9 @@ export function NotificationCenter() {
   const markRead = useMutation(
     trpc.notification.markRead.mutationOptions({
       onSuccess: () => {
+        // Invalidate both list and count so the badge re-fetches from the server
         queryClient.invalidateQueries({ queryKey: trpc.notification.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.notification.unreadCount.queryKey() });
       },
     }),
   );
@@ -25,6 +27,7 @@ export function NotificationCenter() {
     trpc.notification.markAllRead.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: trpc.notification.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.notification.unreadCount.queryKey() });
         useNotificationStore.getState().resetUnread();
       },
     }),

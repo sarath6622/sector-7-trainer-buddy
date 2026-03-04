@@ -80,9 +80,10 @@ Serialization: superjson
 
 | Procedure | Type | Auth | Input | Output |
 |-----------|------|------|-------|--------|
-| `notification.list` | query | protected | `{ page?, limit?, unreadOnly? }` | `{ notifications: Notification[], total: number }` |
-| `notification.markRead` | mutation | protected | `{ id: string }` | `Notification` |
-| `notification.markAllRead` | mutation | protected | — | `{ count: number }` |
+| `notification.list` | query | protected | `{ limit?: number (1–100, default 20), cursor?: string }` | `{ notifications: Notification[], nextCursor?: string }` — cursor-paginated, ordered newest-first |
+| `notification.unreadCount` | query | protected | — | `number` — count of `isRead: false` for the calling user; used to initialize the bell badge on mount |
+| `notification.markRead` | mutation | protected | `{ id: string }` | `Notification` — sets `isRead: true`, `readAt: now()` |
+| `notification.markAllRead` | mutation | protected | — | `{ count: number }` — bulk-marks all unread as read |
 
 ---
 

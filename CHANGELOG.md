@@ -9,6 +9,11 @@ AI assistants: add entries under `[Unreleased]` for every modification per CLAUD
 
 ## [Unreleased]
 
+### Fixed (Sprint 12 — Notification Inbox)
+- `NotificationBell` now fetches `notification.unreadCount` from the server on mount via `useQuery` and syncs it to the Zustand store — fixes badge showing 0 for pre-existing unread notifications (`src/components/notifications/notification-bell.tsx`)
+- `markRead` and `markAllRead` mutations now also invalidate the `notification.unreadCount` query key so the badge immediately reflects the new count after reading (`src/components/notifications/notification-center.tsx`)
+- 11 unit tests for `notification.list`, `notification.unreadCount`, `notification.markRead`, and `notification.markAllRead` covering happy paths, pagination cursor, and UNAUTHORIZED guard (`src/server/trpc/routers/__tests__/notification.test.ts`)
+
 ### Added (Sprint 11 — Challenges & Leaderboard)
 - `challenge.listAll` `adminProcedure` — returns all challenges across all statuses for the admin management page (`src/server/trpc/routers/challenge.ts`)
 - `challenge.activate` `adminProcedure` — transitions DRAFT → ACTIVE; throws BAD_REQUEST if not DRAFT (`src/server/trpc/routers/challenge.ts`)
