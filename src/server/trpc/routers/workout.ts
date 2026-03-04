@@ -527,6 +527,69 @@ export const workoutRouter = router({
     return Array.from(recordMap.values()).sort((a, b) => b.maxWeightKg - a.maxWeightKg);
   }),
 
+  // Aggregates per-client workout metrics for the trainer performance dashboard
+  getTrainerPerformance: trainerProcedure.query(async ({ ctx }) => {
+    const trainerProfile = await ctx.db.trainerProfile.findUnique({
+      where: { userId: ctx.session.user.id },
+      select: { id: true },
+    });
+
+    const emptyStats = { retentionRate: 0, avgWorkoutsPerClientPerWeek: 0, completionRate: 0, pendingTotal: 0 };
+    if (!trainerProfile) return { clients: [], stats: emptyStats };
+
+    const mappings = await ctx.db.trainerClientMapping.findMany({
+      where: { trainerId: trainerProfile.id, isActive: true },
+      include: { client: { include: { user: { select: { name: true, image: true } } } } },
+    });
+
+    if (!mappings.length) return { clients: [], stats: emptyStats };
+
+    const clientIds = mappings.map((m) => m.clientId);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    // Single batch query across all clients — avoids N+1 per client
+    const logs = await ctx.db.workoutLog.findMany({
+      where: { clientId: { in: clientIds }, status: { in: ['COMPLETED', 'ASSIGNED'] } },
+      select: { clientId: true, status: true, date: true },
+    });
+
+    const clientData = mappings.map((m) => {
+      const clientLogs = logs.filter((l) => l.clientId === m.clientId);
+      const completed = clientLogs.filter((l) => l.status === 'COMPLETED');
+      const completedLast30 = completed.filter((l) => l.date >= thirtyDaysAgo).length;
+      const pendingAssigned = clientLogs.filter((l) => l.status === 'ASSIGNED').length;
+      const lastActive = completed.sort((a, b) => b.date.getTime() - a.date.getTime())[0]?.date ?? null;
+      return {
+        clientProfileId: m.clientId,
+        name: m.client.user.name,
+        image: m.client.user.image,
+        completedLast30,
+        completedAllTime: completed.length,
+        pendingAssigned,
+        lastActive: lastActive ? lastActive.toISOString().slice(0, 10) : null,
+      };
+    });
+
+    const activeCount = clientData.length;
+    const retainedCount = clientData.filter((c) => c.completedLast30 > 0).length;
+    const retentionRate = activeCount > 0 ? Math.round((retainedCount / activeCount) * 100) : 0;
+    const totalCompletedLast30 = clientData.reduce((sum, c) => sum + c.completedLast30, 0);
+    // Avg workouts per client per week over the 30-day window
+    const avgWorkoutsPerClientPerWeek =
+      activeCount > 0 ? parseFloat((totalCompletedLast30 / activeCount / (30 / 7)).toFixed(1)) : 0;
+    const totalCompleted = logs.filter((l) => l.status === 'COMPLETED').length;
+    const totalAssigned = logs.filter((l) => l.status === 'ASSIGNED').length;
+    const completionRate =
+      totalCompleted + totalAssigned > 0
+        ? Math.round((totalCompleted / (totalCompleted + totalAssigned)) * 100)
+        : 0;
+
+    return {
+      clients: clientData,
+      stats: { retentionRate, avgWorkoutsPerClientPerWeek, completionRate, pendingTotal: totalAssigned },
+    };
+  }),
+
   // Returns recent workout activity for all clients assigned to the calling trainer
   getTrainerOverview: trainerProcedure.query(async ({ ctx }) => {
     const trainerProfile = await ctx.db.trainerProfile.findUnique({

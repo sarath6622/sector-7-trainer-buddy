@@ -9,7 +9,7 @@ import type { UserRole } from '@/generated/prisma/enums';
 const mockDb = {
     clientProfile: { findUnique: vi.fn() },
     trainerProfile: { findUnique: vi.fn() },
-    trainerClientMapping: { findFirst: vi.fn() },
+    trainerClientMapping: { findFirst: vi.fn(), findMany: vi.fn() },
     workoutLog: {
         findMany: vi.fn(),
         findUnique: vi.fn(),
@@ -163,6 +163,34 @@ const testRouter = t.router({
             });
             return workouts;
         }),
+
+    // getTrainerPerformance: aggregated metrics for trainer dashboard
+    getTrainerPerformance: trainerProcedure.query(async ({ ctx }) => {
+        const emptyStats = { retentionRate: 0, avgWorkoutsPerClientPerWeek: 0, completionRate: 0, pendingTotal: 0 };
+        const trainerProfile = await ctx.db.trainerProfile.findUnique({ where: { userId: ctx.session.user.id }, select: { id: true } });
+        if (!trainerProfile) return { clients: [], stats: emptyStats };
+        const mappings = await ctx.db.trainerClientMapping.findMany({ where: { trainerId: trainerProfile.id, isActive: true }, include: { client: { include: { user: { select: { name: true, image: true } } } } } });
+        if (!mappings.length) return { clients: [], stats: emptyStats };
+        const clientIds = mappings.map((m: any) => m.clientId);
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const logs = await ctx.db.workoutLog.findMany({ where: { clientId: { in: clientIds }, status: { in: ['COMPLETED', 'ASSIGNED'] } }, select: { clientId: true, status: true, date: true } });
+        const clientData = mappings.map((m: any) => {
+            const clientLogs = logs.filter((l: any) => l.clientId === m.clientId);
+            const completed = clientLogs.filter((l: any) => l.status === 'COMPLETED');
+            const completedLast30 = completed.filter((l: any) => l.date >= thirtyDaysAgo).length;
+            const pendingAssigned = clientLogs.filter((l: any) => l.status === 'ASSIGNED').length;
+            return { clientProfileId: m.clientId, name: m.client.user.name, image: m.client.user.image, completedLast30, completedAllTime: completed.length, pendingAssigned, lastActive: null };
+        });
+        const activeCount = clientData.length;
+        const retainedCount = clientData.filter((c: any) => c.completedLast30 > 0).length;
+        const retentionRate = activeCount > 0 ? Math.round((retainedCount / activeCount) * 100) : 0;
+        const totalCompletedLast30 = clientData.reduce((s: number, c: any) => s + c.completedLast30, 0);
+        const avgWorkoutsPerClientPerWeek = activeCount > 0 ? parseFloat((totalCompletedLast30 / activeCount / (30 / 7)).toFixed(1)) : 0;
+        const totalCompleted = logs.filter((l: any) => l.status === 'COMPLETED').length;
+        const totalAssigned = logs.filter((l: any) => l.status === 'ASSIGNED').length;
+        const completionRate = totalCompleted + totalAssigned > 0 ? Math.round((totalCompleted / (totalCompleted + totalAssigned)) * 100) : 0;
+        return { clients: clientData, stats: { retentionRate, avgWorkoutsPerClientPerWeek, completionRate, pendingTotal: totalAssigned } };
+    }),
 
     // getPersonalRecords: best working set per exercise ever
     getPersonalRecords: clientProcedure.query(async ({ ctx }) => {
@@ -411,5 +439,62 @@ describe('workout.getPersonalRecords', () => {
 
     it('throws UNAUTHORIZED when unauthenticated', async () => {
         await expect(caller(null).getPersonalRecords()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    });
+});
+
+// ── workout.getTrainerPerformance ─────────────────────────────────────────────
+
+const mockMappings = [
+    { clientId: 'cp-1', client: { user: { name: 'Alice', image: null } } },
+    { clientId: 'cp-2', client: { user: { name: 'Bob', image: null } } },
+];
+const mockLogs = [
+    { clientId: 'cp-1', status: 'COMPLETED', date: new Date() },
+    { clientId: 'cp-1', status: 'COMPLETED', date: new Date() },
+    { clientId: 'cp-1', status: 'ASSIGNED',  date: new Date() },
+    { clientId: 'cp-2', status: 'ASSIGNED',  date: new Date() },
+];
+
+describe('workout.getTrainerPerformance', () => {
+    it('returns per-client stats and aggregated metrics', async () => {
+        mockDb.trainerProfile.findUnique.mockResolvedValue({ id: 'tp-1' });
+        mockDb.trainerClientMapping.findMany.mockResolvedValue(mockMappings);
+        mockDb.workoutLog.findMany.mockResolvedValue(mockLogs);
+
+        const result = await caller('TRAINER').getTrainerPerformance();
+
+        expect(result.clients).toHaveLength(2);
+        const alice = result.clients.find((c: any) => c.name === 'Alice')!;
+        expect(alice.completedLast30).toBe(2);
+        expect(alice.pendingAssigned).toBe(1);
+
+        // 2 completed out of 3 total (2 completed + 1 assigned for Alice + 1 assigned for Bob)
+        expect(result.stats.completionRate).toBe(50); // 2/(2+2)*100
+        // Only Alice completed — 1 of 2 clients retained
+        expect(result.stats.retentionRate).toBe(50);
+    });
+
+    it('returns empty stats when trainer has no profile', async () => {
+        mockDb.trainerProfile.findUnique.mockResolvedValue(null);
+        const result = await caller('TRAINER').getTrainerPerformance();
+        expect(result.clients).toHaveLength(0);
+        expect(result.stats.retentionRate).toBe(0);
+        expect(result.stats.completionRate).toBe(0);
+    });
+
+    it('returns empty stats when trainer has no active clients', async () => {
+        mockDb.trainerProfile.findUnique.mockResolvedValue({ id: 'tp-1' });
+        mockDb.trainerClientMapping.findMany.mockResolvedValue([]);
+        const result = await caller('TRAINER').getTrainerPerformance();
+        expect(result.clients).toHaveLength(0);
+        expect(result.stats.retentionRate).toBe(0);
+    });
+
+    it('throws FORBIDDEN for CLIENT role', async () => {
+        await expect(caller('CLIENT').getTrainerPerformance()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('throws UNAUTHORIZED when unauthenticated', async () => {
+        await expect(caller(null).getTrainerPerformance()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
     });
 });

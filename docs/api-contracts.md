@@ -71,6 +71,7 @@ Serialization: superjson
 | `workout.getProgressData` | query | `clientProcedure` | `{ exerciseId: string, weeks?: number (1–52, default 12) }` | `Array<{ date: string, maxWeightKg: number, reps: number }>` — one entry per session; warmup sets excluded |
 | `workout.getWeeklyVolume` | query | `clientProcedure` | `{ weeks?: number (1–52, default 12) }` | `Array<{ week: string, weekLabel: string, volume: number, workoutCount: number }>` — all weeks pre-filled with zeros |
 | `workout.getPersonalRecords` | query | `clientProcedure` | — | `Array<{ exerciseId, name, primaryMuscle, maxWeightKg, reps, date }>` — sorted by weight desc |
+| `workout.getTrainerPerformance` | query | `trainerProcedure` | — | `{ clients: Array<{ clientProfileId, name, image, completedLast30, completedAllTime, pendingAssigned, lastActive }>, stats: { retentionRate, avgWorkoutsPerClientPerWeek, completionRate, pendingTotal } }` |
 
 ---
 

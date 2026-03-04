@@ -9,6 +9,11 @@ AI assistants: add entries under `[Unreleased]` for every modification per CLAUD
 
 ## [Unreleased]
 
+### Added (Sprint 8 — Trainer Performance Dashboard)
+- `workout.getTrainerPerformance` `trainerProcedure` — single batched query returning per-client metrics (completedLast30, completedAllTime, pendingAssigned, lastActive) plus aggregated stats (retentionRate, avgWorkoutsPerClientPerWeek, completionRate, pendingTotal) (`src/server/trpc/routers/workout.ts`)
+- Trainer dashboard rebuilt with 4 stat cards (Active Clients, Retention Rate, Avg/Client/Week, Completion Rate), a Recharts BarChart of client activity over the last 30 days, and a per-client status list with last-active label and pending badge (`src/app/(dashboard)/trainer/page.tsx`)
+- 5 new tests for `getTrainerPerformance` covering aggregation logic, empty states, and role guards (32 total in workout suite) (`src/server/trpc/routers/__tests__/workout.test.ts`)
+
 ### Added (Sprint 7 — Client Progress Dashboard)
 - `workout.getProgressData` `clientProcedure` — per-session max weight for a chosen exercise over N weeks; powers the strength progression line chart (`src/server/trpc/routers/workout.ts`)
 - `workout.getWeeklyVolume` `clientProcedure` — weekly training volume (Σ sets × reps × weightKg) for last N weeks with zero-filled gaps; powers the weekly bar chart (`src/server/trpc/routers/workout.ts`)
