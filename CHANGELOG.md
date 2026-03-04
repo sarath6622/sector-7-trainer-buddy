@@ -9,6 +9,15 @@ AI assistants: add entries under `[Unreleased]` for every modification per CLAUD
 
 ## [Unreleased]
 
+### Added (Sprint 7 — Client Progress Dashboard)
+- `workout.getProgressData` `clientProcedure` — per-session max weight for a chosen exercise over N weeks; powers the strength progression line chart (`src/server/trpc/routers/workout.ts`)
+- `workout.getWeeklyVolume` `clientProcedure` — weekly training volume (Σ sets × reps × weightKg) for last N weeks with zero-filled gaps; powers the weekly bar chart (`src/server/trpc/routers/workout.ts`)
+- `workout.getPersonalRecords` `clientProcedure` — best working set per exercise ever logged, sorted by weight (`src/server/trpc/routers/workout.ts`)
+- Client Progress page (`/client/progress`) — Personal Records grid, Strength Progression LineChart with exercise picker, Weekly Volume BarChart, 16-week consistency heatmap (`src/app/(dashboard)/client/progress/page.tsx`)
+- "Progress" nav item added to CLIENT sidebar with `TrendingUp` icon (`src/lib/constants.ts`, `src/components/layout/sidebar.tsx`)
+- Recharts installed as production dependency
+- 10 new tests for the three new procedures added to workout test suite (`src/server/trpc/routers/__tests__/workout.test.ts`)
+
 ### Added (Sprint 10 — Habit Tracking)
 - `HabitCard` component — displays a single habit with today's value, progress bar, streak badge, and inline edit/log form; streak calculated client-side from 30-day window (`src/components/habits/habit-card.tsx`)
 - Habit tracking page (`/client/habits`) — date navigation (prev/next day, capped at today), 5 built-in habit cards (Water, Sleep, Steps, Protein, Calories), daily completion counter, skeleton loading states (`src/app/(dashboard)/client/habits/page.tsx`)

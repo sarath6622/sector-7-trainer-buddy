@@ -28,6 +28,7 @@ export const NAV_ITEMS: Record<UserRole, Array<{ label: string; href: string; ic
   CLIENT: [
     { label: 'Dashboard', href: '/client', icon: 'LayoutDashboard' },
     { label: 'Workouts', href: '/client/workouts', icon: 'Dumbbell' },
+    { label: 'Progress', href: '/client/progress', icon: 'TrendingUp' },
     { label: 'Exercises', href: '/client/exercises', icon: 'Library' },
     { label: 'Habits', href: '/client/habits', icon: 'Heart' },
     { label: 'Community', href: '/client/community', icon: 'Users' },

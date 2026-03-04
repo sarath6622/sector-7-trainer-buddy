@@ -386,6 +386,147 @@ export const workoutRouter = router({
     return { streak, weeklyCount, totalWorkouts, lastWorkout };
   }),
 
+  // Returns per-session max weight for a given exercise — powers the strength progression line chart
+  getProgressData: clientProcedure
+    .input(
+      z.object({
+        exerciseId: z.string(),
+        weeks: z.number().min(1).max(52).default(12),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const profile = await ctx.db.clientProfile.findUnique({
+        where: { userId: ctx.session.user.id },
+        select: { id: true },
+      });
+      if (!profile) return [];
+
+      const since = new Date();
+      since.setDate(since.getDate() - input.weeks * 7);
+
+      const workouts = await ctx.db.workoutLog.findMany({
+        where: { clientId: profile.id, status: 'COMPLETED', date: { gte: since } },
+        orderBy: { date: 'asc' },
+        select: {
+          date: true,
+          exercises: {
+            where: { exerciseId: input.exerciseId },
+            select: { sets: { select: { weightKg: true, reps: true, isWarmup: true } } },
+          },
+        },
+      });
+
+      // For each session that included this exercise, pick the heaviest working set
+      return workouts
+        .filter((w) => w.exercises.length > 0)
+        .map((w) => {
+          const sets = w.exercises.flatMap((e) => e.sets).filter((s) => !s.isWarmup && s.weightKg);
+          const best = sets.reduce(
+            (max, s) => (s.weightKg! > (max.weightKg ?? 0) ? s : max),
+            sets[0] ?? { weightKg: 0, reps: 0 },
+          );
+          return {
+            date: w.date.toISOString().slice(0, 10),
+            maxWeightKg: best.weightKg ?? 0,
+            reps: best.reps ?? 0,
+          };
+        });
+    }),
+
+  // Returns weekly training volume (Σ sets × reps × weightKg) grouped by week — powers the bar chart
+  getWeeklyVolume: clientProcedure
+    .input(z.object({ weeks: z.number().min(1).max(52).default(12) }))
+    .query(async ({ ctx, input }) => {
+      const profile = await ctx.db.clientProfile.findUnique({
+        where: { userId: ctx.session.user.id },
+        select: { id: true },
+      });
+      if (!profile) return [];
+
+      const since = new Date();
+      since.setDate(since.getDate() - input.weeks * 7);
+
+      const workouts = await ctx.db.workoutLog.findMany({
+        where: { clientId: profile.id, status: 'COMPLETED', date: { gte: since } },
+        orderBy: { date: 'asc' },
+        select: {
+          date: true,
+          exercises: { select: { sets: { select: { weightKg: true, reps: true } } } },
+        },
+      });
+
+      // Group by ISO week string (YYYY-Www) and sum volume; include weeks with zero workouts
+      const weekMap = new Map<string, { volume: number; count: number }>();
+
+      // Pre-fill all weeks in range so gaps show as zero bars
+      for (let i = input.weeks - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i * 7);
+        weekMap.set(isoWeek(d), { volume: 0, count: 0 });
+      }
+
+      for (const w of workouts) {
+        const key = isoWeek(w.date);
+        const entry = weekMap.get(key) ?? { volume: 0, count: 0 };
+        const vol = w.exercises
+          .flatMap((e) => e.sets)
+          .reduce((sum, s) => sum + (s.weightKg ?? 0) * (s.reps ?? 0), 0);
+        weekMap.set(key, { volume: entry.volume + vol, count: entry.count + 1 });
+      }
+
+      return Array.from(weekMap.entries()).map(([week, { volume, count }]) => ({
+        week,
+        weekLabel: weekLabel(week),
+        volume: Math.round(volume),
+        workoutCount: count,
+      }));
+    }),
+
+  // Returns personal records: best working set per exercise the client has ever logged
+  getPersonalRecords: clientProcedure.query(async ({ ctx }) => {
+    const profile = await ctx.db.clientProfile.findUnique({
+      where: { userId: ctx.session.user.id },
+      select: { id: true },
+    });
+    if (!profile) return [];
+
+    const exercises = await ctx.db.workoutExercise.findMany({
+      where: { workoutLog: { clientId: profile.id, status: 'COMPLETED' } },
+      select: {
+        exercise: { select: { id: true, name: true, primaryMuscle: true } },
+        sets: { select: { weightKg: true, reps: true, isWarmup: true } },
+        workoutLog: { select: { date: true } },
+      },
+    });
+
+    // For each unique exercise, find the heaviest working set ever logged
+    const recordMap = new Map<
+      string,
+      { exerciseId: string; name: string; primaryMuscle: string; maxWeightKg: number; reps: number; date: string }
+    >();
+
+    for (const we of exercises) {
+      const workingSets = we.sets.filter((s) => !s.isWarmup && s.weightKg && s.weightKg > 0);
+      if (!workingSets.length) continue;
+
+      const best = workingSets.reduce((max, s) => (s.weightKg! > max.weightKg! ? s : max));
+      const existing = recordMap.get(we.exercise.id);
+
+      if (!existing || best.weightKg! > existing.maxWeightKg) {
+        recordMap.set(we.exercise.id, {
+          exerciseId: we.exercise.id,
+          name: we.exercise.name,
+          primaryMuscle: we.exercise.primaryMuscle,
+          maxWeightKg: best.weightKg!,
+          reps: best.reps ?? 0,
+          date: we.workoutLog.date.toISOString().slice(0, 10),
+        });
+      }
+    }
+
+    return Array.from(recordMap.values()).sort((a, b) => b.maxWeightKg - a.maxWeightKg);
+  }),
+
   // Returns recent workout activity for all clients assigned to the calling trainer
   getTrainerOverview: trainerProcedure.query(async ({ ctx }) => {
     const trainerProfile = await ctx.db.trainerProfile.findUnique({
@@ -422,6 +563,26 @@ export const workoutRouter = router({
     };
   }),
 });
+
+// Returns the ISO week string (e.g. "2026-W10") for a given date
+function isoWeek(d: Date): string {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = date.getUTCDay() || 7; // Mon=1 … Sun=7
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}
+
+// Returns a short human-readable label for an ISO week string (e.g. "Mar 3")
+function weekLabel(isoWeekStr: string): string {
+  const [year, week] = isoWeekStr.split('-W').map(Number);
+  // ISO week 1 = week containing first Thursday of the year
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const weekStart = new Date(jan4.getTime() + (week - 1) * 7 * 86400000);
+  weekStart.setUTCDate(weekStart.getUTCDate() - (weekStart.getUTCDay() || 7) + 1);
+  return weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
 
 // Fires an ACHIEVEMENT notification when the client hits a streak milestone (7 or 30 days)
 async function checkAndSendStreakNotification(

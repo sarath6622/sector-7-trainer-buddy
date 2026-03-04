@@ -12,6 +12,7 @@ import {
   Calendar,
   Library,
   Heart,
+  TrendingUp,
   ChevronLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Calendar,
   Library,
   Heart,
+  TrendingUp,
 };
 
 interface SidebarProps {

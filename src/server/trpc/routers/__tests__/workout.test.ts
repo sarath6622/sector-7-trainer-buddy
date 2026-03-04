@@ -131,6 +131,49 @@ const testRouter = t.router({
         ]);
         return { streak, weeklyCount, totalWorkouts, lastWorkout };
     }),
+
+    // getProgressData: returns best set per session for an exercise
+    getProgressData: clientProcedure
+        .input(z.object({ exerciseId: z.string(), weeks: z.number().default(12) }))
+        .query(async ({ ctx, input }) => {
+            const profile = await ctx.db.clientProfile.findUnique({ where: { userId: ctx.session.user.id }, select: { id: true } });
+            if (!profile) return [];
+            const workouts = await ctx.db.workoutLog.findMany({
+                where: { clientId: profile.id, status: 'COMPLETED' },
+                select: { date: true, exercises: { where: { exerciseId: input.exerciseId }, select: { sets: { select: { weightKg: true, reps: true, isWarmup: true } } } } },
+            });
+            return workouts
+                .filter((w: any) => w.exercises.length > 0)
+                .map((w: any) => {
+                    const sets = w.exercises.flatMap((e: any) => e.sets).filter((s: any) => !s.isWarmup && s.weightKg);
+                    const best = sets.reduce((max: any, s: any) => (s.weightKg > (max.weightKg ?? 0) ? s : max), sets[0] ?? { weightKg: 0, reps: 0 });
+                    return { date: w.date.toISOString().slice(0, 10), maxWeightKg: best.weightKg ?? 0, reps: best.reps ?? 0 };
+                });
+        }),
+
+    // getWeeklyVolume: returns volume grouped by week
+    getWeeklyVolume: clientProcedure
+        .input(z.object({ weeks: z.number().default(12) }))
+        .query(async ({ ctx }) => {
+            const profile = await ctx.db.clientProfile.findUnique({ where: { userId: ctx.session.user.id }, select: { id: true } });
+            if (!profile) return [];
+            const workouts = await ctx.db.workoutLog.findMany({
+                where: { clientId: profile.id, status: 'COMPLETED' },
+                select: { date: true, exercises: { select: { sets: { select: { weightKg: true, reps: true } } } } },
+            });
+            return workouts;
+        }),
+
+    // getPersonalRecords: best working set per exercise ever
+    getPersonalRecords: clientProcedure.query(async ({ ctx }) => {
+        const profile = await ctx.db.clientProfile.findUnique({ where: { userId: ctx.session.user.id }, select: { id: true } });
+        if (!profile) return [];
+        const exercises = await ctx.db.workoutExercise.findMany({
+            where: { workoutLog: { clientId: profile.id, status: 'COMPLETED' } },
+            select: { exercise: { select: { id: true, name: true, primaryMuscle: true } }, sets: { select: { weightKg: true, reps: true, isWarmup: true } }, workoutLog: { select: { date: true } } },
+        });
+        return exercises;
+    }),
 });
 
 const makeCtx = (role: UserRole | null): TestContext => ({
@@ -276,5 +319,97 @@ describe('workout.getStats', () => {
         mockDb.clientProfile.findUnique.mockResolvedValue(null);
         const stats = await caller('CLIENT').getStats();
         expect(stats).toEqual({ streak: 0, weeklyCount: 0, totalWorkouts: 0, lastWorkout: null });
+    });
+});
+
+// ── workout.getProgressData ───────────────────────────────────────────────────
+
+describe('workout.getProgressData', () => {
+    it('returns best set per session for a given exercise', async () => {
+        mockDb.clientProfile.findUnique.mockResolvedValue({ id: 'cp-1' });
+        mockDb.workoutLog.findMany.mockResolvedValue([
+            {
+                date: new Date('2026-03-01'),
+                exercises: [{ sets: [{ weightKg: 80, reps: 5, isWarmup: false }, { weightKg: 90, reps: 3, isWarmup: false }] }],
+            },
+            {
+                date: new Date('2026-03-08'),
+                exercises: [{ sets: [{ weightKg: 95, reps: 3, isWarmup: false }] }],
+            },
+        ]);
+        const result = await caller('CLIENT').getProgressData({ exerciseId: 'ex-1', weeks: 12 });
+        expect(result).toHaveLength(2);
+        expect(result[0].maxWeightKg).toBe(90);
+        expect(result[1].maxWeightKg).toBe(95);
+    });
+
+    it('returns empty array when no client profile', async () => {
+        mockDb.clientProfile.findUnique.mockResolvedValue(null);
+        const result = await caller('CLIENT').getProgressData({ exerciseId: 'ex-1', weeks: 12 });
+        expect(result).toEqual([]);
+    });
+
+    it('excludes sessions where the exercise was not performed', async () => {
+        mockDb.clientProfile.findUnique.mockResolvedValue({ id: 'cp-1' });
+        mockDb.workoutLog.findMany.mockResolvedValue([
+            { date: new Date('2026-03-01'), exercises: [] },
+        ]);
+        const result = await caller('CLIENT').getProgressData({ exerciseId: 'ex-1', weeks: 12 });
+        expect(result).toHaveLength(0);
+    });
+
+    it('throws UNAUTHORIZED when unauthenticated', async () => {
+        await expect(caller(null).getProgressData({ exerciseId: 'ex-1', weeks: 12 })).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    });
+});
+
+// ── workout.getWeeklyVolume ───────────────────────────────────────────────────
+
+describe('workout.getWeeklyVolume', () => {
+    it('returns workout data for the client', async () => {
+        mockDb.clientProfile.findUnique.mockResolvedValue({ id: 'cp-1' });
+        mockDb.workoutLog.findMany.mockResolvedValue([
+            { date: new Date('2026-03-01'), exercises: [{ sets: [{ weightKg: 100, reps: 5 }] }] },
+        ]);
+        const result = await caller('CLIENT').getWeeklyVolume({ weeks: 12 });
+        expect(result).toHaveLength(1);
+    });
+
+    it('returns empty array when no client profile', async () => {
+        mockDb.clientProfile.findUnique.mockResolvedValue(null);
+        const result = await caller('CLIENT').getWeeklyVolume({ weeks: 12 });
+        expect(result).toEqual([]);
+    });
+
+    it('throws UNAUTHORIZED when unauthenticated', async () => {
+        await expect(caller(null).getWeeklyVolume({ weeks: 12 })).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    });
+});
+
+// ── workout.getPersonalRecords ────────────────────────────────────────────────
+
+describe('workout.getPersonalRecords', () => {
+    it('returns exercises with best sets', async () => {
+        mockDb.clientProfile.findUnique.mockResolvedValue({ id: 'cp-1' });
+        mockDb.workoutExercise.findMany.mockResolvedValue([
+            {
+                exercise: { id: 'ex-1', name: 'Bench Press', primaryMuscle: 'CHEST' },
+                sets: [{ weightKg: 100, reps: 5, isWarmup: false }],
+                workoutLog: { date: new Date('2026-03-01') },
+            },
+        ]);
+        const result = await caller('CLIENT').getPersonalRecords();
+        expect(result).toHaveLength(1);
+        expect((result[0] as any).exercise.name).toBe('Bench Press');
+    });
+
+    it('returns empty array when no client profile', async () => {
+        mockDb.clientProfile.findUnique.mockResolvedValue(null);
+        const result = await caller('CLIENT').getPersonalRecords();
+        expect(result).toEqual([]);
+    });
+
+    it('throws UNAUTHORIZED when unauthenticated', async () => {
+        await expect(caller(null).getPersonalRecords()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
     });
 });

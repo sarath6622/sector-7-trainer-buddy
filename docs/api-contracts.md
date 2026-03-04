@@ -68,6 +68,9 @@ Serialization: superjson
 | `workout.delete` | mutation | `trainerProcedure` | `{ id: string }` | `{ success: true }` — throws `CONFLICT` if status is `COMPLETED` |
 | `workout.getStats` | query | `clientProcedure` | — | `{ streak, weeklyCount, totalWorkouts, lastWorkout }` |
 | `workout.getTrainerOverview` | query | `trainerProcedure` | — | `{ clients: [{ clientProfileId, name, image, recentWorkouts }] }` |
+| `workout.getProgressData` | query | `clientProcedure` | `{ exerciseId: string, weeks?: number (1–52, default 12) }` | `Array<{ date: string, maxWeightKg: number, reps: number }>` — one entry per session; warmup sets excluded |
+| `workout.getWeeklyVolume` | query | `clientProcedure` | `{ weeks?: number (1–52, default 12) }` | `Array<{ week: string, weekLabel: string, volume: number, workoutCount: number }>` — all weeks pre-filled with zeros |
+| `workout.getPersonalRecords` | query | `clientProcedure` | — | `Array<{ exerciseId, name, primaryMuscle, maxWeightKg, reps, date }>` — sorted by weight desc |
 
 ---
 
