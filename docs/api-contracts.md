@@ -40,6 +40,7 @@ Serialization: superjson
 | `user.create` | mutation | admin | `{ name, email, password, role: 'TRAINER'\|'CLIENT' }` | `User` — creates role-appropriate profile stub atomically; throws `CONFLICT` on duplicate email |
 | `user.updateStatus` | mutation | admin | `{ id: string, status: 'ACTIVE'\|'INACTIVE'\|'SUSPENDED' }` | `{ id, status }` — throws `NOT_FOUND` |
 | `user.deactivate` | mutation | admin | `{ id: string }` | `{ id, status }` — sets `INACTIVE`; throws `BAD_REQUEST` if target is self |
+| `user.getAdminStats` | query | admin | — | `{ totalUsers: number, totalTrainers: number, totalExercises: number }` — parallel count queries for the admin dashboard |
 
 ---
 
@@ -110,9 +111,10 @@ Serialization: superjson
 
 | Procedure | Type | Auth | Input | Output |
 |-----------|------|------|-------|--------|
-| `habit.list` | query | clientProcedure | — | `Habit[]` |
-| `habit.create` | mutation | clientProcedure | `{ name, frequency, target }` | `Habit` |
-| `habit.logCompletion` | mutation | clientProcedure | `{ habitId: string }` | `Habit` |
+| `habit.list` | query | protected | `{ startDate: string, endDate: string }` | `Habit[]` ordered by date desc; returns `[]` when client profile not found |
+| `habit.log` | mutation | protected | `{ type: HabitType, date: string, value: number, label?, unit?, notes? }` | `Habit` — upserts on `[clientId, type, date]` unique key; throws `NOT_FOUND` when client profile missing |
+
+Types: `HabitType = WATER | SLEEP | STEPS | PROTEIN | CALORIES | CUSTOM`
 
 ---
 

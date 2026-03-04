@@ -150,4 +150,15 @@ export const userRouter = router({
         },
       });
     }),
+
+  // Single query for admin dashboard stat cards — avoids three separate round-trips
+  getAdminStats: adminProcedure.query(async ({ ctx }) => {
+    const [totalUsers, totalTrainers, totalExercises] = await Promise.all([
+      ctx.db.user.count({ where: { role: 'CLIENT' } }),
+      ctx.db.user.count({ where: { role: 'TRAINER' } }),
+      ctx.db.exercise.count(),
+    ]);
+
+    return { totalUsers, totalTrainers, totalExercises };
+  }),
 });

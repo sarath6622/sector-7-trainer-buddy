@@ -9,6 +9,19 @@ AI assistants: add entries under `[Unreleased]` for every modification per CLAUD
 
 ## [Unreleased]
 
+### Added (Sprint 10 — Habit Tracking)
+- `HabitCard` component — displays a single habit with today's value, progress bar, streak badge, and inline edit/log form; streak calculated client-side from 30-day window (`src/components/habits/habit-card.tsx`)
+- Habit tracking page (`/client/habits`) — date navigation (prev/next day, capped at today), 5 built-in habit cards (Water, Sleep, Steps, Protein, Calories), daily completion counter, skeleton loading states (`src/app/(dashboard)/client/habits/page.tsx`)
+- Unit tests for `habit.list` and `habit.log`: happy path, missing profile, all valid types, and UNAUTHORIZED guard (`src/server/trpc/routers/__tests__/habit.test.ts`)
+
+### Changed (Docs — Sprint 10)
+- `docs/api-contracts.md` — replaced stale `habit` router table with accurate `habit.list` and `habit.log` procedure contracts
+
+### Added
+- `user.getAdminStats` `adminProcedure` — single query returning `totalUsers` (CLIENT count), `totalTrainers` (TRAINER count), and `totalExercises` for the admin dashboard (`src/server/trpc/routers/user.ts`)
+- Admin dashboard now fetches and displays live data via `user.getAdminStats`; removed the irrelevant "Workouts Today" card; shows skeleton loaders while fetching (`src/app/(dashboard)/admin/page.tsx`)
+- Unit tests for `user.getAdminStats`: happy path, zero counts, and FORBIDDEN/UNAUTHORIZED guards (`src/server/trpc/routers/__tests__/user.test.ts`)
+
 ### Added
 - Coming-soon stub pages for all unimplemented nav routes: `/trainer/schedule`, `/client/habits`, `/client/community`, `/admin/challenges` — prevents 404 (`src/app/(dashboard)/*/*/page.tsx`)
 - Shared `ComingSoonPage` component with animated ping badge and back-navigation (`src/components/shared/coming-soon-page.tsx`)
