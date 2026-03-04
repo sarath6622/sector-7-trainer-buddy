@@ -9,6 +9,11 @@ AI assistants: add entries under `[Unreleased]` for every modification per CLAUD
 
 ## [Unreleased]
 
+### Added (Sprint 9 — Admin Analytics Dashboard)
+- `user.getAdminAnalytics` `adminProcedure` — returns 4 data sets in a single call: user growth (new CLIENT signups per week × 12 weeks), platform activity (completed workouts per week × 12 weeks), top 10 exercises by usage count, and per-trainer comparison (client count + completedLast30) sorted by activity (`src/server/trpc/routers/user.ts`)
+- Admin dashboard rebuilt with 4 Recharts chart panels: New Members line chart, Platform Activity bar chart, Top Exercises horizontal bar chart, and Trainer Comparison avatar list — alongside the existing 3 stat cards (`src/app/(dashboard)/admin/page.tsx`)
+- 8 new tests for `getAdminAnalytics` covering zero-fill, week bucketing, exercise name resolution, trainer comparison aggregation, and role guards (`src/server/trpc/routers/__tests__/user.test.ts`)
+
 ### Added (Sprint 8 — Trainer Performance Dashboard)
 - `workout.getTrainerPerformance` `trainerProcedure` — single batched query returning per-client metrics (completedLast30, completedAllTime, pendingAssigned, lastActive) plus aggregated stats (retentionRate, avgWorkoutsPerClientPerWeek, completionRate, pendingTotal) (`src/server/trpc/routers/workout.ts`)
 - Trainer dashboard rebuilt with 4 stat cards (Active Clients, Retention Rate, Avg/Client/Week, Completion Rate), a Recharts BarChart of client activity over the last 30 days, and a per-client status list with last-active label and pending badge (`src/app/(dashboard)/trainer/page.tsx`)

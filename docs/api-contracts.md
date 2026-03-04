@@ -41,6 +41,7 @@ Serialization: superjson
 | `user.updateStatus` | mutation | admin | `{ id: string, status: 'ACTIVE'\|'INACTIVE'\|'SUSPENDED' }` | `{ id, status }` — throws `NOT_FOUND` |
 | `user.deactivate` | mutation | admin | `{ id: string }` | `{ id, status }` — sets `INACTIVE`; throws `BAD_REQUEST` if target is self |
 | `user.getAdminStats` | query | admin | — | `{ totalUsers: number, totalTrainers: number, totalExercises: number }` — parallel count queries for the admin dashboard |
+| `user.getAdminAnalytics` | query | admin | — | `{ userGrowth: [{weekLabel, newUsers}]×12, platformActivity: [{weekLabel, workouts}]×12, topExercises: [{name, count}]×≤10, trainerComparison: [{name, clientCount, completedLast30}] }` — all analytics data for the admin dashboard charts |
 
 ---
 

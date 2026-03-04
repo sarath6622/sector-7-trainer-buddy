@@ -161,4 +161,128 @@ export const userRouter = router({
 
     return { totalUsers, totalTrainers, totalExercises };
   }),
+
+  // Admin analytics — powers 4 chart panels: user growth, platform activity,
+  // top exercises by usage, and per-trainer client/completion stats
+  getAdminAnalytics: adminProcedure.query(async ({ ctx }) => {
+    const now = new Date();
+    const twelveWeeksAgo = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // Pre-build the last 12 ISO week keys so we can zero-fill gaps in charts
+    const weekKeys: string[] = [];
+    for (let w = 11; w >= 0; w--) {
+      const d = new Date(now.getTime() - w * 7 * 24 * 60 * 60 * 1000);
+      weekKeys.push(analyticsIsoWeek(d));
+    }
+
+    const [newClients, completedLogs, topExerciseGroups, trainerProfiles] = await Promise.all([
+      // New CLIENT registrations in the last 12 weeks (for the growth chart)
+      ctx.db.user.findMany({
+        where: { role: 'CLIENT', createdAt: { gte: twelveWeeksAgo } },
+        select: { createdAt: true },
+      }),
+      // All COMPLETED workout logs in the last 12 weeks (for platform activity chart)
+      ctx.db.workoutLog.findMany({
+        where: { status: 'COMPLETED', date: { gte: twelveWeeksAgo } },
+        select: { date: true, clientId: true },
+      }),
+      // Top 10 exercises by number of WorkoutExercise entries ever logged
+      ctx.db.workoutExercise.groupBy({
+        by: ['exerciseId'],
+        _count: { exerciseId: true },
+        orderBy: { _count: { exerciseId: 'desc' } },
+        take: 10,
+      }),
+      // All trainer profiles with their active client IDs and trainer name
+      ctx.db.trainerProfile.findMany({
+        select: {
+          id: true,
+          user: { select: { name: true } },
+          clientMappings: { where: { isActive: true }, select: { clientId: true } },
+        },
+      }),
+    ]);
+
+    // ── User Growth: group new clients by ISO week, zero-fill gaps ───────────
+    const growthMap = new Map<string, number>(weekKeys.map((k) => [k, 0]));
+    for (const u of newClients) {
+      const key = analyticsIsoWeek(new Date(u.createdAt));
+      if (growthMap.has(key)) growthMap.set(key, (growthMap.get(key) ?? 0) + 1);
+    }
+    const userGrowth = weekKeys.map((k) => ({
+      weekLabel: analyticsWeekLabel(k),
+      newUsers: growthMap.get(k) ?? 0,
+    }));
+
+    // ── Platform Activity: group completed workouts by ISO week ──────────────
+    const activityMap = new Map<string, number>(weekKeys.map((k) => [k, 0]));
+    for (const log of completedLogs) {
+      const key = analyticsIsoWeek(new Date(log.date));
+      if (activityMap.has(key)) activityMap.set(key, (activityMap.get(key) ?? 0) + 1);
+    }
+    const platformActivity = weekKeys.map((k) => ({
+      weekLabel: analyticsWeekLabel(k),
+      workouts: activityMap.get(k) ?? 0,
+    }));
+
+    // ── Top Exercises: resolve exercise names for the grouped IDs ────────────
+    const exerciseIds = topExerciseGroups.map((g) => g.exerciseId);
+    const exercises = exerciseIds.length > 0
+      ? await ctx.db.exercise.findMany({
+          where: { id: { in: exerciseIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const exerciseNameMap = new Map(exercises.map((e) => [e.id, e.name]));
+    const topExercises = topExerciseGroups.map((g) => ({
+      name: exerciseNameMap.get(g.exerciseId) ?? 'Unknown',
+      count: g._count.exerciseId,
+    }));
+
+    // ── Trainer Comparison: batch-fetch last-30-day logs for all mapped clients
+    const allClientIds = trainerProfiles.flatMap((t) => t.clientMappings.map((m) => m.clientId));
+    const recentLogs = allClientIds.length > 0
+      ? await ctx.db.workoutLog.findMany({
+          where: { clientId: { in: allClientIds }, status: 'COMPLETED', date: { gte: thirtyDaysAgo } },
+          select: { clientId: true },
+        })
+      : [];
+
+    const completedByClient = new Map<string, number>();
+    for (const log of recentLogs) {
+      completedByClient.set(log.clientId, (completedByClient.get(log.clientId) ?? 0) + 1);
+    }
+
+    const trainerComparison = trainerProfiles
+      .map((t) => {
+        const clientIds = t.clientMappings.map((m) => m.clientId);
+        const completedLast30 = clientIds.reduce(
+          (sum, cid) => sum + (completedByClient.get(cid) ?? 0), 0,
+        );
+        return { name: t.user.name ?? 'Unknown', clientCount: clientIds.length, completedLast30 };
+      })
+      .sort((a, b) => b.completedLast30 - a.completedLast30);
+
+    return { userGrowth, platformActivity, topExercises, trainerComparison };
+  }),
 });
+
+// Returns the ISO week string (e.g. "2026-W10") for a given date
+function analyticsIsoWeek(d: Date): string {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = date.getUTCDay() || 7; // Mon=1 … Sun=7
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}
+
+// Returns a short human-readable label for an ISO week string (e.g. "Mar 3")
+function analyticsWeekLabel(isoWeekStr: string): string {
+  const [year, week] = isoWeekStr.split('-W').map(Number);
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const weekStart = new Date(jan4.getTime() + (week - 1) * 7 * 86400000);
+  weekStart.setUTCDate(weekStart.getUTCDate() - (weekStart.getUTCDay() || 7) + 1);
+  return weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
