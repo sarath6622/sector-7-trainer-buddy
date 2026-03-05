@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -36,7 +36,7 @@ const exerciseSchema = z.object({
 
 const assignSchema = z.object({
     clientId: z.string().min(1),
-    title: z.string().min(1, 'Title is required'),
+    title: z.string().optional(),   // optional — auto-generated from exercises if blank
     notes: z.string().optional(),
     scheduledAt: z.string().optional(),
     exercises: z.array(exerciseSchema).min(1, 'Add at least one exercise'),
@@ -86,6 +86,17 @@ export function AssignWorkoutForm({ open, onOpenChange, defaultClientId, onSucce
         name: 'exercises',
     });
 
+    // Watch added exercise IDs to build an auto-title placeholder
+    const watchedExercises = useWatch({ control, name: 'exercises' });
+    const autoTitle = (() => {
+        const names = (watchedExercises ?? [])
+            .map((ex) => exerciseData?.exercises.find((e) => e.id === ex.exerciseId)?.name)
+            .filter(Boolean);
+        if (names.length === 0) return 'e.g. Push Day A';
+        if (names.length === 1) return names[0]!;
+        return `${names[0]} + ${names.length - 1} more`;
+    })();
+
     function addExercise(exerciseId: string) {
         appendExercise({
             exerciseId,
@@ -101,20 +112,28 @@ export function AssignWorkoutForm({ open, onOpenChange, defaultClientId, onSucce
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col">
-                <SheetHeader className="px-6 pt-6 pb-4">
+            <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col h-full overflow-hidden">
+                <SheetHeader className="px-6 pt-6 pb-4 shrink-0">
                     <SheetTitle>Assign Workout</SheetTitle>
                     <SheetDescription>Build a workout and assign it to a client.</SheetDescription>
                 </SheetHeader>
 
-                <ScrollArea className="flex-1 px-6">
+                <ScrollArea className="flex-1 min-h-0 px-6">
                     <form id="assign-workout-form" onSubmit={handleSubmit(onSubmit as any)} className="space-y-6 pb-6">
                         {/* Workout meta */}
                         <div className="space-y-4">
                             <div className="space-y-1.5">
-                                <Label htmlFor="workout-title">Workout Title</Label>
-                                <Input id="workout-title" placeholder="e.g. Push Day A" {...register('title')} />
-                                {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
+                                <Label htmlFor="workout-title">
+                                    Title <span className="text-muted-foreground font-normal">(optional)</span>
+                                </Label>
+                                <Input
+                                    id="workout-title"
+                                    placeholder={autoTitle}
+                                    {...register('title')}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Leave blank to use: <span className="italic">{autoTitle}</span>
+                                </p>
                             </div>
                             <div className="space-y-1.5">
                                 <Label htmlFor="scheduled-at">Scheduled Date (optional)</Label>
@@ -190,7 +209,7 @@ export function AssignWorkoutForm({ open, onOpenChange, defaultClientId, onSucce
                     </form>
                 </ScrollArea>
 
-                <SheetFooter className="px-6 py-4 border-t">
+                <SheetFooter className="px-6 py-4 border-t shrink-0">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                     <Button form="assign-workout-form" type="submit" disabled={assign.isPending}>
                         {assign.isPending ? 'Assigning…' : 'Assign Workout'}

@@ -142,7 +142,7 @@ export const workoutRouter = router({
     .input(
       z.object({
         clientId: z.string(),
-        title: z.string().min(1),
+        title: z.string().optional(), // omitting auto-generates "Workout" on the server
         notes: z.string().optional(),
         scheduledAt: z.string().datetime().optional(),
         exercises: z.array(workoutExerciseSchema).min(1),
@@ -165,7 +165,7 @@ export const workoutRouter = router({
       const workout = await ctx.db.workoutLog.create({
         data: {
           clientId: input.clientId,
-          title: input.title,
+          title: input.title ?? 'Workout',
           notes: input.notes,
           assignedByTrainerId: trainerProfile?.id,
           scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : undefined,
