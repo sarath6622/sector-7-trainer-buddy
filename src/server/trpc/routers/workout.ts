@@ -590,6 +590,81 @@ export const workoutRouter = router({
     };
   }),
 
+  // Returns workouts in a date range for the calendar view.
+  // Trainer: all active-mapped clients' workouts. Client: own workouts only.
+  getScheduled: clientProcedure
+    .input(
+      z.object({
+        startDate: z.string(), // ISO date string (YYYY-MM-DD)
+        endDate: z.string(),
+        clientId: z.string().optional(), // trainer can filter to a single client
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const { startDate, endDate } = input;
+      const role = ctx.session.user.role;
+      const start = new Date(startDate);
+      const end = new Date(endDate + 'T23:59:59.999Z');
+
+      if (role === 'CLIENT') {
+        const profile = await ctx.db.clientProfile.findUnique({
+          where: { userId: ctx.session.user.id },
+          select: { id: true },
+        });
+        if (!profile) return [];
+
+        const logs = await ctx.db.workoutLog.findMany({
+          where: { clientId: profile.id, date: { gte: start, lte: end } },
+          select: { id: true, title: true, date: true, scheduledAt: true, status: true },
+          orderBy: { date: 'asc' },
+        });
+        return logs.map((l) => ({ ...l, clientName: null, clientImage: null, clientProfileId: profile.id }));
+      }
+
+      // Trainer/admin: fetch all active-mapped clients' workouts
+      const trainerProfile = await ctx.db.trainerProfile.findUnique({
+        where: { userId: ctx.session.user.id },
+        select: { id: true },
+      });
+      if (!trainerProfile) return [];
+
+      const mappings = await ctx.db.trainerClientMapping.findMany({
+        where: {
+          trainerId: trainerProfile.id,
+          isActive: true,
+          ...(input.clientId ? { clientId: input.clientId } : {}),
+        },
+        select: {
+          clientId: true,
+          client: { select: { user: { select: { name: true, image: true } } } },
+        },
+      });
+
+      if (mappings.length === 0) return [];
+
+      const clientIds = mappings.map((m) => m.clientId);
+      const clientMeta = new Map(
+        mappings.map((m) => [m.clientId, { name: m.client.user.name, image: m.client.user.image }]),
+      );
+
+      const logs = await ctx.db.workoutLog.findMany({
+        where: { clientId: { in: clientIds }, date: { gte: start, lte: end } },
+        select: { id: true, title: true, date: true, scheduledAt: true, status: true, clientId: true },
+        orderBy: { date: 'asc' },
+      });
+
+      return logs.map((l) => ({
+        id: l.id,
+        title: l.title,
+        date: l.date,
+        scheduledAt: l.scheduledAt,
+        status: l.status,
+        clientProfileId: l.clientId,
+        clientName: clientMeta.get(l.clientId)?.name ?? null,
+        clientImage: clientMeta.get(l.clientId)?.image ?? null,
+      }));
+    }),
+
   // Returns recent workout activity for all clients assigned to the calling trainer
   getTrainerOverview: trainerProcedure.query(async ({ ctx }) => {
     const trainerProfile = await ctx.db.trainerProfile.findUnique({

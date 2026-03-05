@@ -73,6 +73,7 @@ Serialization: superjson
 | `workout.getWeeklyVolume` | query | `clientProcedure` | `{ weeks?: number (1–52, default 12) }` | `Array<{ week: string, weekLabel: string, volume: number, workoutCount: number }>` — all weeks pre-filled with zeros |
 | `workout.getPersonalRecords` | query | `clientProcedure` | — | `Array<{ exerciseId, name, primaryMuscle, maxWeightKg, reps, date }>` — sorted by weight desc |
 | `workout.getTrainerPerformance` | query | `trainerProcedure` | — | `{ clients: Array<{ clientProfileId, name, image, completedLast30, completedAllTime, pendingAssigned, lastActive }>, stats: { retentionRate, avgWorkoutsPerClientPerWeek, completionRate, pendingTotal } }` |
+| `workout.getScheduled` | query | `clientProcedure` | `{ startDate: string, endDate: string, clientId?: string }` | `Array<{ id, title, date, scheduledAt, status, clientProfileId, clientName, clientImage }>` — CLIENT sees own workouts only; TRAINER sees all active-mapped clients; `clientName`/`clientImage` are `null` for CLIENT callers |
 
 ---
 

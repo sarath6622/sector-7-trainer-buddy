@@ -9,6 +9,13 @@ AI assistants: add entries under `[Unreleased]` for every modification per CLAUD
 
 ## [Unreleased]
 
+### Added (Sprint 15 — Workout Calendar)
+- `workout.getScheduled` `clientProcedure` — returns workouts in a date range for the calendar view; CLIENT sees only their own logs, TRAINER sees all active-mapped clients' workouts with `clientName`/`clientImage` (`src/server/trpc/routers/workout.ts`)
+- `WorkoutCalendar` shared component — month grid calendar built with date-fns; colour-coded chips by status (ASSIGNED=blue, IN_PROGRESS=yellow, COMPLETED=green, SKIPPED=gray); prev/next month nav; status legend; `onWorkoutClick` + `showClientName` props (`src/components/workouts/workout-calendar.tsx`)
+- Trainer Workouts page — added **Calendar** tab alongside existing Overview tab; calendar shows all active clients' workouts with client names on chips (`src/app/(dashboard)/trainer/workouts/page.tsx`)
+- Client Workouts page — added **Calendar** tab as third tab alongside Assigned and History; clicking a workout chip opens the detail sheet (`src/app/(dashboard)/client/workouts/page.tsx`)
+- 9 unit tests for `getScheduled` covering CLIENT/TRAINER paths, no-profile guards, empty mapping, clientId filter, and UNAUTHORIZED (`src/server/trpc/routers/__tests__/workout.calendar.test.ts`)
+
 ### Added (Sprint 14 — Admin Audit Log)
 - `src/lib/audit.ts` — fire-and-forget `writeAudit(db, userId, action, entity, entityId, details?)` helper; never throws so callers always succeed
 - `auditLog.list` `adminProcedure` — paginated audit log with filters: userId, action prefix (`USER_`, `CLIENT_`, `CHALLENGE_`), entity, dateFrom, dateTo; returns logs with full actor user details (`src/server/trpc/routers/auditLog.ts`)

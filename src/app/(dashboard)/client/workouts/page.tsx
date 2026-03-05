@@ -8,10 +8,12 @@ import { Button } from '@/components/ui/button';
 import { WorkoutLogCard } from '@/components/workouts/workout-log-card';
 import { WorkoutDetailSheet } from '@/components/workouts/workout-detail-sheet';
 import { WorkoutLogger } from '@/components/workouts/workout-logger';
+import { WorkoutCalendar, type CalendarWorkout } from '@/components/workouts/workout-calendar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dumbbell, Plus } from 'lucide-react';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import type { WorkoutStatus } from '@/generated/prisma/enums';
 
 type WorkoutEntry = {
@@ -31,19 +33,31 @@ type WorkoutEntry = {
     }>;
 };
 
-// Client view of their workouts — assigned workouts tab + completed history tab
+// Client view of their workouts — assigned workouts tab + completed history tab + calendar
 export default function ClientWorkoutsPage() {
     const trpc = useTRPC();
     const [loggerOpen, setLoggerOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<'assigned' | 'history'>('assigned');
+    const [activeTab, setActiveTab] = useState<'assigned' | 'history' | 'calendar'>('assigned');
     const [selectedWorkout, setSelectedWorkout] = useState<WorkoutEntry | null>(null);
     const [completingWorkout, setCompletingWorkout] = useState<WorkoutEntry | null>(null);
+
+    // Calendar date range — defaults to the current month
+    const [calRange, setCalRange] = useState(() => ({
+        startDate: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
+    }));
 
     const { data: assignedData, isLoading: loadingAssigned } = useQuery(
         trpc.workout.list.queryOptions({ status: 'ASSIGNED', limit: 20 }),
     );
     const { data: historyData, isLoading: loadingHistory } = useQuery(
         trpc.workout.list.queryOptions({ status: 'COMPLETED', limit: 20 }),
+    );
+    const { data: scheduledWorkouts, isLoading: calLoading } = useQuery(
+        trpc.workout.getScheduled.queryOptions({
+            startDate: calRange.startDate,
+            endDate: calRange.endDate,
+        }),
     );
 
     const isLoading = loadingAssigned || loadingHistory;
@@ -63,6 +77,16 @@ export default function ClientWorkoutsPage() {
 
     const assigned = (assignedData?.workouts as unknown as WorkoutEntry[]) ?? [];
     const history = (historyData?.workouts as unknown as WorkoutEntry[]) ?? [];
+
+    const handleCalWorkoutClick = (w: CalendarWorkout) => {
+        setSelectedWorkout({
+            id: w.id,
+            title: w.title,
+            date: new Date(w.date),
+            status: w.status,
+            exercises: [],
+        });
+    };
 
     return (
         <div className="space-y-6">
@@ -88,6 +112,7 @@ export default function ClientWorkoutsPage() {
                         )}
                     </TabsTrigger>
                     <TabsTrigger value="history" className="flex-1 sm:flex-none">History</TabsTrigger>
+                    <TabsTrigger value="calendar" className="flex-1 sm:flex-none">Calendar</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="assigned" className="mt-4">
@@ -153,6 +178,18 @@ export default function ClientWorkoutsPage() {
                             ))}
                         </div>
                     )}
+                </TabsContent>
+
+                <TabsContent value="calendar" className="mt-4">
+                    <WorkoutCalendar
+                        workouts={(scheduledWorkouts ?? []).map((w) => ({
+                            ...w,
+                            date: new Date(w.date),
+                        }))}
+                        isLoading={calLoading}
+                        onMonthChange={(start, end) => setCalRange({ startDate: start, endDate: end })}
+                        onWorkoutClick={handleCalWorkoutClick}
+                    />
                 </TabsContent>
             </Tabs>
 

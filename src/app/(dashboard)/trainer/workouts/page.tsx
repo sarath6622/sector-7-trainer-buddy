@@ -8,10 +8,13 @@ import { Button } from '@/components/ui/button';
 import { WorkoutLogCard } from '@/components/workouts/workout-log-card';
 import { WorkoutDetailSheet } from '@/components/workouts/workout-detail-sheet';
 import { AssignWorkoutForm } from '@/components/workouts/assign-workout-form';
+import { WorkoutCalendar, type CalendarWorkout } from '@/components/workouts/workout-calendar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Users } from 'lucide-react';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import type { WorkoutStatus } from '@/generated/prisma/enums';
 
 interface SelectedWorkout {
@@ -32,12 +35,36 @@ export default function TrainerWorkoutsPage() {
     const [assignClientId, setAssignClientId] = useState<string | undefined>();
     const [detailWorkout, setDetailWorkout] = useState<SelectedWorkout | null>(null);
 
+    // Calendar date range — defaults to the current month
+    const [calRange, setCalRange] = useState(() => ({
+        startDate: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
+    }));
+
     const { data: overview, isLoading } = useQuery(trpc.workout.getTrainerOverview.queryOptions());
+
+    const { data: scheduledWorkouts, isLoading: calLoading } = useQuery(
+        trpc.workout.getScheduled.queryOptions({
+            startDate: calRange.startDate,
+            endDate: calRange.endDate,
+        }),
+    );
 
     function handleAssign(clientProfileId: string) {
         setAssignClientId(clientProfileId);
         setAssignOpen(true);
     }
+
+    const handleCalWorkoutClick = (w: CalendarWorkout) => {
+        // Open the detail sheet — fetch full detail via getById from the sheet itself
+        setDetailWorkout({
+            id: w.id,
+            title: w.title,
+            date: new Date(w.date),
+            status: w.status,
+            exercises: [],
+        });
+    };
 
     if (isLoading) {
         return (
@@ -56,64 +83,88 @@ export default function TrainerWorkoutsPage() {
         <div className="space-y-6">
             <PageHeader title="Workouts" description="Assign and track workouts for your clients" />
 
-            {overview?.clients.length === 0 ? (
-                <Card>
-                    <CardContent className="flex flex-col items-center justify-center py-12 gap-3">
-                        <Users className="h-10 w-10 text-muted-foreground/40" />
-                        <p className="text-sm text-muted-foreground">No clients assigned to you yet.</p>
-                    </CardContent>
-                </Card>
-            ) : (
-                <div className="space-y-6">
-                    {overview?.clients.map((client) => (
-                        <Card key={client.clientProfileId}>
-                            <CardHeader className="pb-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <Avatar className="h-9 w-9">
-                                            <AvatarImage src={client.image ?? undefined} />
-                                            <AvatarFallback>{client.name?.charAt(0) ?? '?'}</AvatarFallback>
-                                        </Avatar>
-                                        <div>
-                                            <CardTitle className="text-base">{client.name ?? 'Client'}</CardTitle>
-                                            <p className="text-xs text-muted-foreground">
-                                                {client.recentWorkouts.length} recent workout{client.recentWorkouts.length !== 1 ? 's' : ''}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Button
-                                        size="sm"
-                                        onClick={() => handleAssign(client.clientProfileId)}
-                                        className="gap-1.5"
-                                    >
-                                        <Plus className="h-3.5 w-3.5" />
-                                        Assign
-                                    </Button>
-                                </div>
-                            </CardHeader>
+            <Tabs defaultValue="overview">
+                <TabsList>
+                    <TabsTrigger value="overview">Overview</TabsTrigger>
+                    <TabsTrigger value="calendar">Calendar</TabsTrigger>
+                </TabsList>
 
-                            <CardContent>
-                                {client.recentWorkouts.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground text-center py-4">No workouts yet. Assign one to get started.</p>
-                                ) : (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                        {client.recentWorkouts.map((w) => (
-                                            <WorkoutLogCard
-                                                key={w.id}
-                                                id={w.id}
-                                                title={w.title}
-                                                date={new Date(w.date)}
-                                                status={w.status as WorkoutStatus}
-                                                scheduledAt={w.scheduledAt ? new Date(w.scheduledAt) : null}
-                                            />
-                                        ))}
-                                    </div>
-                                )}
+                {/* ── Overview tab ─────────────────────────────────────────── */}
+                <TabsContent value="overview" className="mt-4">
+                    {overview?.clients.length === 0 ? (
+                        <Card>
+                            <CardContent className="flex flex-col items-center justify-center py-12 gap-3">
+                                <Users className="h-10 w-10 text-muted-foreground/40" />
+                                <p className="text-sm text-muted-foreground">No clients assigned to you yet.</p>
                             </CardContent>
                         </Card>
-                    ))}
-                </div>
-            )}
+                    ) : (
+                        <div className="space-y-6">
+                            {overview?.clients.map((client) => (
+                                <Card key={client.clientProfileId}>
+                                    <CardHeader className="pb-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-9 w-9">
+                                                    <AvatarImage src={client.image ?? undefined} />
+                                                    <AvatarFallback>{client.name?.charAt(0) ?? '?'}</AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <CardTitle className="text-base">{client.name ?? 'Client'}</CardTitle>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {client.recentWorkouts.length} recent workout{client.recentWorkouts.length !== 1 ? 's' : ''}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                onClick={() => handleAssign(client.clientProfileId)}
+                                                className="gap-1.5"
+                                            >
+                                                <Plus className="h-3.5 w-3.5" />
+                                                Assign
+                                            </Button>
+                                        </div>
+                                    </CardHeader>
+
+                                    <CardContent>
+                                        {client.recentWorkouts.length === 0 ? (
+                                            <p className="text-sm text-muted-foreground text-center py-4">No workouts yet. Assign one to get started.</p>
+                                        ) : (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                {client.recentWorkouts.map((w) => (
+                                                    <WorkoutLogCard
+                                                        key={w.id}
+                                                        id={w.id}
+                                                        title={w.title}
+                                                        date={new Date(w.date)}
+                                                        status={w.status as WorkoutStatus}
+                                                        scheduledAt={w.scheduledAt ? new Date(w.scheduledAt) : null}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
+                </TabsContent>
+
+                {/* ── Calendar tab ─────────────────────────────────────────── */}
+                <TabsContent value="calendar" className="mt-4">
+                    <WorkoutCalendar
+                        workouts={(scheduledWorkouts ?? []).map((w) => ({
+                            ...w,
+                            date: new Date(w.date),
+                        }))}
+                        isLoading={calLoading}
+                        showClientName
+                        onMonthChange={(start, end) => setCalRange({ startDate: start, endDate: end })}
+                        onWorkoutClick={handleCalWorkoutClick}
+                    />
+                </TabsContent>
+            </Tabs>
 
             <AssignWorkoutForm
                 open={assignOpen}
