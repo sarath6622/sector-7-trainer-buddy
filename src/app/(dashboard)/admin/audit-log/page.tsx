@@ -40,7 +40,7 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 const ACTION_GROUPS = [
-  { label: 'All actions', value: '' },
+  { label: 'All actions', value: 'all' },
   { label: 'User actions', value: 'USER_' },
   { label: 'Client assignments', value: 'CLIENT_' },
   { label: 'Challenge actions', value: 'CHALLENGE_' },
@@ -77,13 +77,13 @@ export default function AuditLogPage() {
   const trpc = useTRPC();
 
   const [page, setPage] = useState(1);
-  const [actionFilter, setActionFilter] = useState('');
+  const [actionFilter, setActionFilter] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
   const { data, isLoading } = useQuery(
     trpc.auditLog.list.queryOptions({
-      action: actionFilter || undefined,
+      action: actionFilter === 'all' ? undefined : actionFilter,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
       page,
@@ -141,12 +141,12 @@ export default function AuditLogPage() {
               />
             </div>
 
-            {(actionFilter || dateFrom || dateTo) && (
+            {(actionFilter !== 'all' || dateFrom || dateTo) && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  setActionFilter('');
+                  setActionFilter('all');
                   setDateFrom('');
                   setDateTo('');
                   setPage(1);
