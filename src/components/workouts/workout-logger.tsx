@@ -29,7 +29,7 @@ const setSchema = z.object({
 });
 
 const exerciseSchema = z.object({
-    exerciseId: z.string(),
+    exerciseId: z.string().min(1),
     orderIndex: z.number(),
     notes: z.string().optional(),
     sets: z.array(setSchema).min(1),
@@ -40,7 +40,11 @@ const exerciseSchema = z.object({
 const logSchema = z.object({
     title: z.string().optional(),
     notes: z.string().optional(),
-    durationMin: z.coerce.number().min(1).optional(),
+    // Empty string → undefined so duration is truly optional
+    durationMin: z.preprocess(
+        (v) => (v === '' || v === null || v === undefined ? undefined : Number(v)),
+        z.number().min(1).optional(),
+    ),
     exercises: z.array(exerciseSchema).min(1, 'Add at least one exercise'),
 });
 
@@ -48,10 +52,11 @@ type LogFormValues = z.infer<typeof logSchema>;
 
 interface AssignedExercise {
     id: string;
+    exerciseId: string;   // FK → Exercise.id
     orderIndex: number;
     notes?: string | null;
     sets: Array<{ setNumber: number; reps?: number | null; weightKg?: number | null }>;
-    exercise: { id: string; name: string; primaryMuscle: MuscleGroup };
+    exercise: { name: string; primaryMuscle: MuscleGroup };
 }
 
 interface WorkoutLoggerProps {
@@ -75,7 +80,6 @@ export function WorkoutLogger({ open, onOpenChange, assignedWorkout, onSuccess }
 
     const { data: exerciseData } = useQuery(
         trpc.exercise.list.queryOptions({ search: exerciseSearch, limit: 20 }),
-        // Only fetch when the sheet is open and this is a self-log (not completing assigned)
     );
 
     const log = useMutation(trpc.workout.log.mutationOptions({
@@ -92,7 +96,7 @@ export function WorkoutLogger({ open, onOpenChange, assignedWorkout, onSuccess }
 
     const complete = useMutation(trpc.workout.complete.mutationOptions({
         onSuccess: () => {
-            toast.success('Workout completed! 🔥');
+            toast.success('Workout completed!');
             queryClient.invalidateQueries(trpc.workout.list.queryFilter());
             queryClient.invalidateQueries(trpc.workout.getStats.queryFilter());
             onSuccess?.();
@@ -103,7 +107,7 @@ export function WorkoutLogger({ open, onOpenChange, assignedWorkout, onSuccess }
     }));
 
     const defaultExercises = assignedWorkout?.exercises.map((we) => ({
-        exerciseId: we.exercise.id,
+        exerciseId: we.exerciseId,          // use the FK field, not we.exercise.id
         orderIndex: we.orderIndex,
         notes: we.notes ?? '',
         exerciseName: we.exercise.name,
@@ -157,7 +161,9 @@ export function WorkoutLogger({ open, onOpenChange, assignedWorkout, onSuccess }
                 <SheetHeader className="px-6 pt-6 pb-4">
                     <SheetTitle>{isCompleting ? 'Log Assigned Workout' : 'Log Workout'}</SheetTitle>
                     <SheetDescription>
-                        {isCompleting ? 'Enter the actual sets and reps you performed.' : 'Record your session set by set.'}
+                        {isCompleting
+                            ? 'Adjust sets to what you actually performed, then complete.'
+                            : 'Record your session set by set.'}
                     </SheetDescription>
                 </SheetHeader>
 
@@ -171,8 +177,10 @@ export function WorkoutLogger({ open, onOpenChange, assignedWorkout, onSuccess }
                                 </div>
                             )}
                             <div className="space-y-1.5">
-                                <Label htmlFor="log-duration">Duration (min)</Label>
-                                <Input id="log-duration" type="number" placeholder="45" {...register('durationMin')} />
+                                <Label htmlFor="log-duration">
+                                    Duration (min) <span className="text-muted-foreground font-normal text-xs">(optional)</span>
+                                </Label>
+                                <Input id="log-duration" type="number" placeholder="e.g. 45" {...register('durationMin')} />
                             </div>
                             <div className="space-y-1.5">
                                 <Label htmlFor="log-notes">Notes</Label>

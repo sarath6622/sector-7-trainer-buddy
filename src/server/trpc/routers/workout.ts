@@ -144,7 +144,7 @@ export const workoutRouter = router({
         clientId: z.string(),
         title: z.string().optional(), // omitting auto-generates "Workout" on the server
         notes: z.string().optional(),
-        scheduledAt: z.string().datetime().optional(),
+        scheduledAt: z.string().optional(),
         exercises: z.array(workoutExerciseSchema).min(1),
       }),
     )
@@ -203,6 +203,56 @@ export const workoutRouter = router({
       }
 
       return workout;
+    }),
+
+  // Trainer edits an existing ASSIGNED workout (replaces exercises/sets in full)
+  updateAssigned: trainerProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        title: z.string().optional(),
+        notes: z.string().optional(),
+        scheduledAt: z.string().optional(),
+        exercises: z.array(workoutExerciseSchema).min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.workoutLog.findUnique({
+        where: { id: input.id },
+        select: { clientId: true, status: true, title: true, scheduledAt: true },
+      });
+
+      if (!existing) throw new TRPCError({ code: 'NOT_FOUND' });
+      if (existing.status !== 'ASSIGNED') {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Can only edit ASSIGNED workouts' });
+      }
+
+      const hasAccess = await WorkoutService.canTrainerAccessClient(ctx.session.user.id, existing.clientId);
+      if (!hasAccess) throw new TRPCError({ code: 'FORBIDDEN' });
+
+      await ctx.db.$transaction(async (tx) => {
+        // Delete all existing exercises (sets cascade via onDelete: Cascade)
+        await tx.workoutExercise.deleteMany({ where: { workoutLogId: input.id } });
+
+        await tx.workoutLog.update({
+          where: { id: input.id },
+          data: {
+            title: input.title ?? existing.title,
+            notes: input.notes,
+            scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : existing.scheduledAt,
+            exercises: {
+              create: input.exercises.map((ex) => ({
+                exerciseId: ex.exerciseId,
+                orderIndex: ex.orderIndex,
+                notes: ex.notes,
+                sets: { create: ex.sets },
+              })),
+            },
+          },
+        });
+      });
+
+      return { id: input.id };
     }),
 
   // Client self-logs a completed workout from scratch (no trainer template needed)

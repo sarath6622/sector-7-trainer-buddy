@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,7 +14,6 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTRPC } from '@/trpc/client';
-import { trpcClient } from '@/trpc/client';
 import { toast } from 'sonner';
 import { Plus, Trash2, Dumbbell } from 'lucide-react';
 
@@ -36,7 +35,7 @@ const exerciseSchema = z.object({
 
 const assignSchema = z.object({
     clientId: z.string().min(1),
-    title: z.string().optional(),   // optional — auto-generated from exercises if blank
+    title: z.string().optional(),
     notes: z.string().optional(),
     scheduledAt: z.string().optional(),
     exercises: z.array(exerciseSchema).min(1, 'Add at least one exercise'),
@@ -48,18 +47,27 @@ interface AssignWorkoutFormProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     defaultClientId?: string;
+    /** When provided, the form operates in edit mode for an existing ASSIGNED workout */
+    editWorkoutId?: string;
     onSuccess?: () => void;
 }
 
-// Trainer-facing form for building and assigning a workout template to a specific client
-export function AssignWorkoutForm({ open, onOpenChange, defaultClientId, onSuccess }: AssignWorkoutFormProps) {
+// Trainer-facing form for building/assigning a workout, or editing an existing ASSIGNED workout
+export function AssignWorkoutForm({ open, onOpenChange, defaultClientId, editWorkoutId, onSuccess }: AssignWorkoutFormProps) {
     const trpc = useTRPC();
     const queryClient = useQueryClient();
     const [exerciseSearch, setExerciseSearch] = useState('');
+    const isEditMode = !!editWorkoutId;
 
     const { data: exerciseData } = useQuery(
         trpc.exercise.list.queryOptions({ search: exerciseSearch, limit: 20 }),
     );
+
+    // Fetch existing workout data when in edit mode
+    const { data: existingWorkout } = useQuery({
+        ...trpc.workout.getById.queryOptions({ id: editWorkoutId! }),
+        enabled: isEditMode && open,
+    });
 
     const assign = useMutation(trpc.workout.assign.mutationOptions({
         onSuccess: () => {
@@ -67,24 +75,58 @@ export function AssignWorkoutForm({ open, onOpenChange, defaultClientId, onSucce
             queryClient.invalidateQueries(trpc.workout.getTrainerOverview.queryFilter());
             onSuccess?.();
             onOpenChange(false);
-            reset();
         },
         onError: (err: { message: string }) => toast.error(err.message),
     }));
 
+    const update = useMutation(trpc.workout.updateAssigned.mutationOptions({
+        onSuccess: () => {
+            toast.success('Workout updated successfully');
+            queryClient.invalidateQueries(trpc.workout.getTrainerOverview.queryFilter());
+            onSuccess?.();
+            onOpenChange(false);
+        },
+        onError: (err: { message: string }) => toast.error(err.message),
+    }));
+
+    const isPending = assign.isPending || update.isPending;
+
     const { register, control, handleSubmit, reset, formState: { errors } } = useForm<AssignFormValues>({
         resolver: zodResolver(assignSchema) as any,
-        defaultValues: {
-            clientId: defaultClientId ?? '',
-            title: '',
-            exercises: [],
-        },
+        defaultValues: { clientId: defaultClientId ?? '', title: '', exercises: [] },
     });
 
     const { fields: exerciseFields, append: appendExercise, remove: removeExercise } = useFieldArray({
         control,
         name: 'exercises',
     });
+
+    // Re-initialise form when sheet opens (create mode) or when existing workout data loads (edit mode)
+    useEffect(() => {
+        if (!open) return;
+
+        if (isEditMode && existingWorkout) {
+            reset({
+                clientId: existingWorkout.clientId,
+                title: existingWorkout.title ?? '',
+                notes: existingWorkout.notes ?? '',
+                exercises: existingWorkout.exercises.map((ex: any) => ({
+                    exerciseId: ex.exerciseId,
+                    orderIndex: ex.orderIndex,
+                    notes: ex.notes ?? '',
+                    sets: ex.sets.map((s: any) => ({
+                        setNumber: s.setNumber,
+                        reps: s.reps ?? undefined,
+                        weightKg: s.weightKg ?? undefined,
+                        isWarmup: s.isWarmup,
+                        isDropSet: s.isDropSet,
+                    })),
+                })),
+            });
+        } else if (!isEditMode) {
+            reset({ clientId: defaultClientId ?? '', title: '', exercises: [] });
+        }
+    }, [open, isEditMode, existingWorkout, defaultClientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Watch added exercise IDs to build an auto-title placeholder
     const watchedExercises = useWatch({ control, name: 'exercises' });
@@ -107,15 +149,21 @@ export function AssignWorkoutForm({ open, onOpenChange, defaultClientId, onSucce
     }
 
     function onSubmit(values: AssignFormValues) {
-        assign.mutate(values);
+        if (isEditMode && editWorkoutId) {
+            update.mutate({ id: editWorkoutId, ...values });
+        } else {
+            assign.mutate(values);
+        }
     }
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col h-full overflow-hidden">
                 <SheetHeader className="px-6 pt-6 pb-4 shrink-0">
-                    <SheetTitle>Assign Workout</SheetTitle>
-                    <SheetDescription>Build a workout and assign it to a client.</SheetDescription>
+                    <SheetTitle>{isEditMode ? 'Edit Workout' : 'Assign Workout'}</SheetTitle>
+                    <SheetDescription>
+                        {isEditMode ? 'Update the exercises and details for this workout.' : 'Build a workout and assign it to a client.'}
+                    </SheetDescription>
                 </SheetHeader>
 
                 <ScrollArea className="flex-1 min-h-0 px-6">
@@ -182,10 +230,14 @@ export function AssignWorkoutForm({ open, onOpenChange, defaultClientId, onSucce
                                 <Label>Added Exercises ({exerciseFields.length})</Label>
                                 {exerciseFields.map((field, exIdx) => {
                                     const exercise = exerciseData?.exercises.find((e) => e.id === field.exerciseId);
+                                    // In edit mode, fall back to the existing workout's exercise name when not in the search results
+                                    const exerciseName = exercise?.name
+                                        ?? existingWorkout?.exercises.find((e: any) => e.exerciseId === field.exerciseId)?.exercise?.name
+                                        ?? 'Exercise';
                                     return (
                                         <div key={field.id} className="border rounded-lg p-4 space-y-3">
                                             <div className="flex items-center justify-between">
-                                                <p className="text-sm font-medium">{exercise?.name ?? 'Exercise'}</p>
+                                                <p className="text-sm font-medium">{exerciseName}</p>
                                                 <Button
                                                     type="button"
                                                     variant="ghost"
@@ -211,8 +263,8 @@ export function AssignWorkoutForm({ open, onOpenChange, defaultClientId, onSucce
 
                 <SheetFooter className="px-6 py-4 border-t shrink-0">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button form="assign-workout-form" type="submit" disabled={assign.isPending}>
-                        {assign.isPending ? 'Assigning…' : 'Assign Workout'}
+                    <Button form="assign-workout-form" type="submit" disabled={isPending}>
+                        {isPending ? (isEditMode ? 'Saving…' : 'Assigning…') : (isEditMode ? 'Save Changes' : 'Assign Workout')}
                     </Button>
                 </SheetFooter>
             </SheetContent>
@@ -226,16 +278,15 @@ function SetsEditor({ control, exIdx, register }: { control: any; exIdx: number;
 
     return (
         <div className="space-y-2">
-            <div className="grid grid-cols-4 text-xs text-muted-foreground font-medium px-1">
-                <span>Set</span><span>Reps</span><span>kg</span><span>RPE</span>
+            <div className="grid grid-cols-3 text-xs text-muted-foreground font-medium px-1">
+                <span>Set</span><span>Reps</span><span>kg</span>
             </div>
             {fields.map((set, sIdx) => (
-                <div key={set.id} className="grid grid-cols-4 gap-1 items-center">
+                <div key={set.id} className="grid grid-cols-3 gap-1 items-center">
                     <span className="text-xs text-muted-foreground pl-1">{sIdx + 1}</span>
                     <Input type="number" className="h-7 text-xs" {...register(`exercises.${exIdx}.sets.${sIdx}.reps`)} placeholder="10" />
-                    <Input type="number" className="h-7 text-xs" {...register(`exercises.${exIdx}.sets.${sIdx}.weightKg`)} placeholder="0" />
                     <div className="flex items-center gap-1">
-                        <Input type="number" className="h-7 text-xs" {...register(`exercises.${exIdx}.sets.${sIdx}.rpe`)} placeholder="—" />
+                        <Input type="number" className="h-7 text-xs" {...register(`exercises.${exIdx}.sets.${sIdx}.weightKg`)} placeholder="0" />
                         {fields.length > 1 && (
                             <button type="button" onClick={() => remove(sIdx)} className="text-muted-foreground hover:text-destructive">
                                 <Trash2 className="h-3 w-3" />

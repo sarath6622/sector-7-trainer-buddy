@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useTRPC } from '@/trpc/client';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { WorkoutLogCard } from '@/components/workouts/workout-log-card';
 import { WorkoutDetailSheet } from '@/components/workouts/workout-detail-sheet';
 import { WorkoutLogger } from '@/components/workouts/workout-logger';
-import { WorkoutCalendar, type CalendarWorkout } from '@/components/workouts/workout-calendar';
+import { WorkoutCalendar } from '@/components/workouts/workout-calendar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -26,10 +26,11 @@ type WorkoutEntry = {
     scheduledAt?: Date | null;
     exercises: Array<{
         id: string;
+        exerciseId: string;
         orderIndex: number;
         notes?: string | null;
         sets: Array<{ setNumber: number; reps?: number | null; weightKg?: number | null }>;
-        exercise: { id: string; name: string; primaryMuscle: string };
+        exercise: { name: string; primaryMuscle: string };
     }>;
 };
 
@@ -38,7 +39,7 @@ export default function ClientWorkoutsPage() {
     const trpc = useTRPC();
     const [loggerOpen, setLoggerOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'assigned' | 'history' | 'calendar'>('assigned');
-    const [selectedWorkout, setSelectedWorkout] = useState<WorkoutEntry | null>(null);
+    const [selectedWorkoutId, setSelectedWorkoutId] = useState<string | null>(null);
     const [completingWorkout, setCompletingWorkout] = useState<WorkoutEntry | null>(null);
 
     // Calendar date range — defaults to the current month
@@ -77,16 +78,6 @@ export default function ClientWorkoutsPage() {
 
     const assigned = (assignedData?.workouts as unknown as WorkoutEntry[]) ?? [];
     const history = (historyData?.workouts as unknown as WorkoutEntry[]) ?? [];
-
-    const handleCalWorkoutClick = (w: CalendarWorkout) => {
-        setSelectedWorkout({
-            id: w.id,
-            title: w.title,
-            date: new Date(w.date),
-            status: w.status,
-            exercises: [],
-        });
-    };
 
     return (
         <div className="space-y-6">
@@ -135,7 +126,7 @@ export default function ClientWorkoutsPage() {
                                         scheduledAt={w.scheduledAt ? new Date(w.scheduledAt) : null}
                                         exerciseCount={w.exercises.length}
                                         muscleGroups={w.exercises.map((e) => e.exercise.primaryMuscle)}
-                                        onClick={() => setSelectedWorkout(w)}
+                                        onClick={() => setSelectedWorkoutId(w.id)}
                                     />
                                     <Button
                                         id={`start-assigned-${w.id}`}
@@ -173,7 +164,7 @@ export default function ClientWorkoutsPage() {
                                     status={w.status}
                                     exerciseCount={w.exercises.length}
                                     muscleGroups={w.exercises.map((e) => e.exercise.primaryMuscle)}
-                                    onClick={() => setSelectedWorkout(w)}
+                                    onClick={() => setSelectedWorkoutId(w.id)}
                                 />
                             ))}
                         </div>
@@ -188,7 +179,7 @@ export default function ClientWorkoutsPage() {
                         }))}
                         isLoading={calLoading}
                         onMonthChange={(start, end) => setCalRange({ startDate: start, endDate: end })}
-                        onWorkoutClick={handleCalWorkoutClick}
+                        onWorkoutClick={(w) => setSelectedWorkoutId(w.id)}
                     />
                 </TabsContent>
             </Tabs>
@@ -208,9 +199,9 @@ export default function ClientWorkoutsPage() {
 
             {/* Full workout detail */}
             <WorkoutDetailSheet
-                open={!!selectedWorkout}
-                onOpenChange={(o) => !o && setSelectedWorkout(null)}
-                workout={selectedWorkout as any}
+                open={!!selectedWorkoutId}
+                onOpenChange={(o) => !o && setSelectedWorkoutId(null)}
+                workoutId={selectedWorkoutId}
             />
         </div>
     );

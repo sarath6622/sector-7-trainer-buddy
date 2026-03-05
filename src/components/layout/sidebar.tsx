@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
+import { Logo } from '@/components/ui/logo';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import {
@@ -50,38 +50,22 @@ export function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'hidden h-svh flex-col border-r bg-background transition-all duration-300 md:flex',
+        'relative hidden h-svh flex-col border-r bg-background transition-all duration-300 md:flex',
         isCollapsed ? 'w-16' : 'w-64',
       )}
     >
       <div className="flex h-14 items-center justify-between border-b px-3">
         {!isCollapsed && (
-          <Link href={`/${role.toLowerCase()}`} className="flex items-center gap-2">
-            {/* Logo: save your logo image to /public/logo.png to display it */}
-            <Image
-              src="/logo.png"
-              alt="Sector 7 Fitness"
-              width={120}
-              height={36}
-              className="h-9 w-auto object-contain"
-              priority
-            />
+          <Link href={`/${role.toLowerCase()}`} className="flex items-center">
+            <Logo className="scale-[0.85] origin-left" />
           </Link>
         )}
         {isCollapsed && (
-          <Link href={`/${role.toLowerCase()}`} className="flex items-center justify-center">
-            {/* Collapsed: show a small square logo crop or brand icon */}
-            <Image
-              src="/logo.png"
-              alt="S7"
-              width={32}
-              height={32}
-              className="h-8 w-8 object-contain"
-              priority
-            />
+          <Link href={`/${role.toLowerCase()}`} className="flex items-center justify-center w-full pr-2">
+            <Logo collapsed className="scale-90" />
           </Link>
         )}
-        <Button variant="ghost" size="icon" onClick={onToggleCollapse} className="shrink-0">
+        <Button variant="ghost" size="icon" onClick={onToggleCollapse} className={cn("shrink-0 h-8 w-8 z-50", isCollapsed && "absolute -right-4 top-3 bg-background border rounded-full")}>
           <ChevronLeft
             className={cn('h-4 w-4 transition-transform', isCollapsed && 'rotate-180')}
           />

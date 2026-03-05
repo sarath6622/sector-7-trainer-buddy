@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTRPC } from '@/trpc/client';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
@@ -17,23 +17,14 @@ import { Plus, Users } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import type { WorkoutStatus } from '@/generated/prisma/enums';
 
-interface SelectedWorkout {
-    id: string;
-    title?: string | null;
-    date: Date;
-    durationMin?: number | null;
-    notes?: string | null;
-    status: WorkoutStatus;
-    exercises: any[];
-}
-
 // Trainer dashboard for managing client workouts — shows overview of all assigned clients
 export default function TrainerWorkoutsPage() {
     const trpc = useTRPC();
     const queryClient = useQueryClient();
     const [assignOpen, setAssignOpen] = useState(false);
     const [assignClientId, setAssignClientId] = useState<string | undefined>();
-    const [detailWorkout, setDetailWorkout] = useState<SelectedWorkout | null>(null);
+    const [editWorkoutId, setEditWorkoutId] = useState<string | undefined>();
+    const [detailWorkoutId, setDetailWorkoutId] = useState<string | null>(null);
 
     // Calendar date range — defaults to the current month
     const [calRange, setCalRange] = useState(() => ({
@@ -54,17 +45,6 @@ export default function TrainerWorkoutsPage() {
         setAssignClientId(clientProfileId);
         setAssignOpen(true);
     }
-
-    const handleCalWorkoutClick = (w: CalendarWorkout) => {
-        // Open the detail sheet — fetch full detail via getById from the sheet itself
-        setDetailWorkout({
-            id: w.id,
-            title: w.title,
-            date: new Date(w.date),
-            status: w.status,
-            exercises: [],
-        });
-    };
 
     if (isLoading) {
         return (
@@ -140,6 +120,7 @@ export default function TrainerWorkoutsPage() {
                                                         date={new Date(w.date)}
                                                         status={w.status as WorkoutStatus}
                                                         scheduledAt={w.scheduledAt ? new Date(w.scheduledAt) : null}
+                                                        onClick={() => setDetailWorkoutId(w.id)}
                                                     />
                                                 ))}
                                             </div>
@@ -161,22 +142,29 @@ export default function TrainerWorkoutsPage() {
                         isLoading={calLoading}
                         showClientName
                         onMonthChange={(start, end) => setCalRange({ startDate: start, endDate: end })}
-                        onWorkoutClick={handleCalWorkoutClick}
+                        onWorkoutClick={(w) => setDetailWorkoutId(w.id)}
                     />
                 </TabsContent>
             </Tabs>
 
             <AssignWorkoutForm
                 open={assignOpen}
-                onOpenChange={setAssignOpen}
+                onOpenChange={(o) => { setAssignOpen(o); if (!o) setEditWorkoutId(undefined); }}
                 defaultClientId={assignClientId}
+                editWorkoutId={editWorkoutId}
                 onSuccess={() => queryClient.invalidateQueries(trpc.workout.getTrainerOverview.queryFilter())}
             />
 
             <WorkoutDetailSheet
-                open={!!detailWorkout}
-                onOpenChange={(o) => !o && setDetailWorkout(null)}
-                workout={detailWorkout}
+                open={!!detailWorkoutId}
+                onOpenChange={(o) => !o && setDetailWorkoutId(null)}
+                workoutId={detailWorkoutId}
+                onEdit={(id) => {
+                    setDetailWorkoutId(null);
+                    setEditWorkoutId(id);
+                    setAssignClientId(undefined);
+                    setAssignOpen(true);
+                }}
             />
         </div>
     );

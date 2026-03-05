@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Logo } from '@/components/ui/logo';
 import { APP_NAME } from '@/lib/constants';
 
 interface TopNavProps {
@@ -39,7 +40,7 @@ export function TopNav({ onMenuToggle, notificationSlot, themeToggleSlot }: TopN
         </Button>
       )}
 
-      <span className="text-lg font-bold md:hidden">{APP_NAME}</span>
+      <Logo className="scale-[0.6] origin-left md:hidden" />
 
       <div className="ml-auto flex items-center gap-2">
         {themeToggleSlot}
