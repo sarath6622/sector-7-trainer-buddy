@@ -16,6 +16,7 @@ export const NAV_ITEMS: Record<UserRole, Array<{ label: string; href: string; ic
     { label: 'Trainers', href: '/admin/trainers', icon: 'UserCheck' },
     { label: 'Exercises', href: '/admin/exercises', icon: 'Dumbbell' },
     { label: 'Challenges', href: '/admin/challenges', icon: 'Trophy' },
+    { label: 'Audit Log', href: '/admin/audit-log', icon: 'ScrollText' },
   ],
   TRAINER: [
     { label: 'Dashboard', href: '/trainer', icon: 'LayoutDashboard' },

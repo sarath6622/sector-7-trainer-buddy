@@ -2,6 +2,7 @@ import 'server-only';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure, adminProcedure } from '../init';
+import { writeAudit } from '@/lib/audit';
 
 export const challengeRouter = router({
   // Lists challenges; defaults to ACTIVE — includes current user's participation status
@@ -71,10 +72,14 @@ export const challengeRouter = router({
       if (challenge.status !== 'DRAFT')
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Only DRAFT challenges can be activated' });
 
-      return ctx.db.challenge.update({
+      const activated = await ctx.db.challenge.update({
         where: { id: input.id },
         data: { status: 'ACTIVE' },
       });
+      writeAudit(ctx.db, ctx.session.user.id, 'CHALLENGE_ACTIVATE', 'Challenge', input.id, {
+        name: challenge.name,
+      });
+      return activated;
     }),
 
   // Cancels a DRAFT or ACTIVE challenge (preserves history, does not delete)
@@ -86,10 +91,15 @@ export const challengeRouter = router({
       if (!['DRAFT', 'ACTIVE'].includes(challenge.status))
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Challenge cannot be cancelled' });
 
-      return ctx.db.challenge.update({
+      const cancelled = await ctx.db.challenge.update({
         where: { id: input.id },
         data: { status: 'CANCELLED' },
       });
+      writeAudit(ctx.db, ctx.session.user.id, 'CHALLENGE_CANCEL', 'Challenge', input.id, {
+        name: challenge.name,
+        previousStatus: challenge.status,
+      });
+      return cancelled;
     }),
 
   // Client joins an ACTIVE challenge; guard prevents duplicate active participation

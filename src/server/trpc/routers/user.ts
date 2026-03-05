@@ -3,6 +3,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { TRPCError } from '@trpc/server';
 import { router, adminProcedure, protectedProcedure } from '../init';
+import { writeAudit } from '@/lib/audit';
 
 export const userRouter = router({
   // List users — filterable by role, paginated
@@ -74,7 +75,7 @@ export const userRouter = router({
 
       const passwordHash = await bcrypt.hash(input.password, 12);
 
-      return ctx.db.user.create({
+      const created = await ctx.db.user.create({
         data: {
           name: input.name,
           email: input.email,
@@ -95,6 +96,12 @@ export const userRouter = router({
           createdAt: true,
         },
       });
+      writeAudit(ctx.db, ctx.session.user.id, 'USER_CREATE', 'User', created.id, {
+        name: created.name,
+        email: created.email,
+        role: created.role,
+      });
+      return created;
     }),
 
   // Admin updates a user's status (ACTIVE / SUSPENDED / INACTIVE)
@@ -109,11 +116,15 @@ export const userRouter = router({
       const user = await ctx.db.user.findUnique({ where: { id: input.id } });
       if (!user) throw new TRPCError({ code: 'NOT_FOUND' });
 
-      return ctx.db.user.update({
+      const updated = await ctx.db.user.update({
         where: { id: input.id },
         data: { status: input.status },
         select: { id: true, status: true },
       });
+      writeAudit(ctx.db, ctx.session.user.id, 'USER_STATUS_UPDATE', 'User', input.id, {
+        newStatus: input.status,
+      });
+      return updated;
     }),
 
   // Soft-delete equivalent: set INACTIVE rather than destroy data
@@ -125,11 +136,13 @@ export const userRouter = router({
       if (user.id === ctx.session.user.id)
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot deactivate your own account' });
 
-      return ctx.db.user.update({
+      const deactivated = await ctx.db.user.update({
         where: { id: input.id },
         data: { status: 'INACTIVE' },
         select: { id: true, status: true },
       });
+      writeAudit(ctx.db, ctx.session.user.id, 'USER_DEACTIVATE', 'User', input.id);
+      return deactivated;
     }),
 
   getById: protectedProcedure

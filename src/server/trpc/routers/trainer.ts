@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, trainerProcedure, adminProcedure } from '../init';
 import { NotificationService } from '@/server/services/notification.service';
+import { writeAudit } from '@/lib/audit';
 
 // ── Reusable select for returning trainer details to the admin UI ──────────────
 const TRAINER_SELECT = {
@@ -293,6 +294,12 @@ export const trainerRouter = router({
         message: `${mapping.trainer.user.name ?? 'A trainer'} has been assigned to coach you.`,
       }).catch((err) => console.error('[assignClient] notification failed:', err));
 
+      writeAudit(ctx.db, ctx.session.user.id, 'CLIENT_ASSIGN', 'TrainerClientMapping', mapping.id, {
+        trainerId: mapping.trainerId,
+        clientId: mapping.clientId,
+        type: mapping.type,
+      });
+
       return { id: mapping.id, trainerId: mapping.trainerId, clientId: mapping.clientId, type: mapping.type, isActive: mapping.isActive };
 
     }),
@@ -305,9 +312,13 @@ export const trainerRouter = router({
       if (!mapping) throw new TRPCError({ code: 'NOT_FOUND' });
       if (!mapping.isActive) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Mapping is already inactive' });
 
-      return ctx.db.trainerClientMapping.update({
+      const removed = await ctx.db.trainerClientMapping.update({
         where: { id: input.mappingId },
         data: { isActive: false, endDate: new Date(), reason: input.reason },
       });
+      writeAudit(ctx.db, ctx.session.user.id, 'CLIENT_UNASSIGN', 'TrainerClientMapping', input.mappingId, {
+        reason: input.reason,
+      });
+      return removed;
     }),
 });

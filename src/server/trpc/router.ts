@@ -8,6 +8,7 @@ import { trainerRouter } from './routers/trainer';
 import { profileRouter } from './routers/profile';
 import { habitRouter } from './routers/habit';
 import { challengeRouter } from './routers/challenge';
+import { auditLogRouter } from './routers/auditLog';
 
 export const appRouter = router({
   auth: authRouter,
@@ -19,6 +20,7 @@ export const appRouter = router({
   profile: profileRouter,
   habit: habitRouter,
   challenge: challengeRouter,
+  auditLog: auditLogRouter,
 });
 
 export type AppRouter = typeof appRouter;

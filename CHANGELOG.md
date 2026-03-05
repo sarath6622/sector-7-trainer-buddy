@@ -9,6 +9,15 @@ AI assistants: add entries under `[Unreleased]` for every modification per CLAUD
 
 ## [Unreleased]
 
+### Added (Sprint 14 — Admin Audit Log)
+- `src/lib/audit.ts` — fire-and-forget `writeAudit(db, userId, action, entity, entityId, details?)` helper; never throws so callers always succeed
+- `auditLog.list` `adminProcedure` — paginated audit log with filters: userId, action prefix (`USER_`, `CLIENT_`, `CHALLENGE_`), entity, dateFrom, dateTo; returns logs with full actor user details (`src/server/trpc/routers/auditLog.ts`)
+- Instrumented `user.create`, `user.updateStatus`, `user.deactivate` with `USER_CREATE`, `USER_STATUS_UPDATE`, `USER_DEACTIVATE` audit entries (`src/server/trpc/routers/user.ts`)
+- Instrumented `trainer.assignClient`, `trainer.removeAssignment` with `CLIENT_ASSIGN`, `CLIENT_UNASSIGN` audit entries (`src/server/trpc/routers/trainer.ts`)
+- Instrumented `challenge.activate`, `challenge.cancel` with `CHALLENGE_ACTIVATE`, `CHALLENGE_CANCEL` audit entries (`src/server/trpc/routers/challenge.ts`)
+- Admin Audit Log page (`/admin/audit-log`) — filterable table (action type, date range) with actor avatar, colour-coded action badge, entity + ID, expandable JSON details panel, pagination; `ScrollText` icon added to admin sidebar (`src/app/(dashboard)/admin/audit-log/page.tsx`)
+- 10 unit tests covering pagination, totalPages, all filter types, skip offset, and role/auth guards (`src/server/trpc/routers/__tests__/auditLog.test.ts`)
+
 ### Added (Sprint 13 — Trainer Schedule & Availability)
 - `trainer.addAvailabilityBlock` `trainerProcedure` — creates a blocked date range with optional reason; validates end > start (`src/server/trpc/routers/trainer.ts`)
 - `trainer.removeAvailabilityBlock` `trainerProcedure` — deletes an owned availability block; throws FORBIDDEN if the block belongs to a different trainer (`src/server/trpc/routers/trainer.ts`)

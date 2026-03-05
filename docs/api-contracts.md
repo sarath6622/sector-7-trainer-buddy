@@ -141,6 +141,16 @@ Types: `HabitType = WATER | SLEEP | STEPS | PROTEIN | CALORIES | CUSTOM`
 
 ---
 
+### `auditLog` router
+
+| Procedure | Type | Auth | Input | Output |
+|-----------|------|------|-------|--------|
+| `auditLog.list` | query | admin | `{ userId?, action?, entity?, dateFrom?, dateTo?, page?, limit? }` | `{ logs, total, page, totalPages }` — logs include actor `user` details; `action` is a prefix-match (e.g. `USER_`, `CLIENT_`, `CHALLENGE_`) |
+
+Action values written by the platform: `USER_CREATE`, `USER_STATUS_UPDATE`, `USER_DEACTIVATE`, `CLIENT_ASSIGN`, `CLIENT_UNASSIGN`, `CHALLENGE_ACTIVATE`, `CHALLENGE_CANCEL`
+
+---
+
 ## REST Endpoints
 
 ### `POST /api/pusher/auth`
