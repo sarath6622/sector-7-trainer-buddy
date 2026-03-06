@@ -1,14 +1,12 @@
 'use client';
 
 import { useEffect, useCallback } from 'react';
-import { getToken, onMessage } from 'firebase/messaging';
+import { getToken } from 'firebase/messaging';
 import { getFirebaseMessaging } from '@/lib/firebase';
 import { useSession } from 'next-auth/react';
-import { useNotificationStore } from '@/stores/use-notification-store';
 
 export function useFcm() {
   const { data: session } = useSession();
-  const addNotification = useNotificationStore((s) => s.addNotification);
 
   const requestPermissionAndRegister = useCallback(async () => {
     if (!session?.user?.id) return;
@@ -41,29 +39,6 @@ export function useFcm() {
   useEffect(() => {
     requestPermissionAndRegister();
   }, [requestPermissionAndRegister]);
-
-  // Handle foreground messages
-  useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-
-    getFirebaseMessaging().then((messaging) => {
-      if (!messaging) return;
-      unsubscribe = onMessage(messaging, (payload) => {
-        if (payload.notification) {
-          addNotification({
-            id: payload.messageId ?? crypto.randomUUID(),
-            type: (payload.data?.type as string) ?? 'SYSTEM_ANNOUNCEMENT',
-            title: payload.notification.title ?? 'Notification',
-            message: payload.notification.body ?? '',
-            isRead: false,
-            createdAt: new Date().toISOString(),
-          });
-        }
-      });
-    });
-
-    return () => unsubscribe?.();
-  }, [addNotification]);
 
   return { requestPermissionAndRegister };
 }
