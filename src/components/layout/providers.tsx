@@ -7,6 +7,7 @@ import { ThemeProvider } from 'next-themes';
 import { TRPCProvider, trpcClient } from '@/trpc/client';
 import { makeQueryClient } from '@/trpc/query-client';
 import { Toaster } from '@/components/ui/sonner';
+import { PWAInstallPrompt } from '@/components/layout/pwa-install-prompt';
 
 let browserQueryClient: ReturnType<typeof makeQueryClient> | undefined;
 
@@ -31,6 +32,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
             {children}
             <Toaster />
+            <PWAInstallPrompt />
           </TRPCProvider>
         </QueryClientProvider>
       </SessionProvider>
