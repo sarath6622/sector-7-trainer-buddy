@@ -92,8 +92,8 @@ function ChatThread({
   }, [isLoading]);
 
   return (
-    <>
-      <ScrollArea className="flex-1 px-4 py-3">
+    <div className="flex flex-col flex-1 min-h-0">
+      <ScrollArea className="flex-1 min-h-0 px-4 py-3">
         {isLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -142,7 +142,7 @@ function ChatThread({
       </ScrollArea>
 
       {/* Send input */}
-      <div className="px-4 py-3 border-t flex gap-2">
+      <div className="px-4 py-3 border-t flex gap-2 shrink-0">
         <Input
           placeholder="Type a message…"
           value={body}
@@ -164,7 +164,7 @@ function ChatThread({
           <Send className="h-4 w-4" />
         </Button>
       </div>
-    </>
+    </div>
   );
 }
 
