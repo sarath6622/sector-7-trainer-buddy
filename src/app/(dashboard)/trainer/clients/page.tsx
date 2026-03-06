@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { ClientCard } from '@/components/trainer/client-card';
 import { ClientDetailSheet } from '@/components/trainer/client-detail-sheet';
 import { AssignWorkoutForm } from '@/components/workouts/assign-workout-form';
+import { MessageSheet } from '@/components/messages/message-sheet';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Users } from 'lucide-react';
@@ -16,6 +17,7 @@ export default function TrainerClientsPage() {
     const trpc = useTRPC();
     const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
     const [assigningForClient, setAssigningForClient] = useState<string | null>(null);
+    const [messagingClient, setMessagingClient] = useState<{ clientProfileId: string; name?: string | null } | null>(null);
 
     const { data: clients, isLoading } = useQuery(trpc.trainer.getClients.queryOptions());
 
@@ -61,6 +63,7 @@ export default function TrainerClientsPage() {
                             profileCompleted={c.profileCompleted}
                             onView={setSelectedClientId}
                             onAssignWorkout={setAssigningForClient}
+                            onMessage={(id, name) => setMessagingClient({ clientProfileId: id, name })}
                         />
                     ))}
                 </div>
@@ -76,6 +79,13 @@ export default function TrainerClientsPage() {
                 open={!!assigningForClient}
                 onOpenChange={(o) => !o && setAssigningForClient(null)}
                 defaultClientId={assigningForClient ?? undefined}
+            />
+
+            <MessageSheet
+                open={!!messagingClient}
+                onOpenChange={(o) => !o && setMessagingClient(null)}
+                clientProfileId={messagingClient?.clientProfileId ?? null}
+                otherUserName={messagingClient?.name}
             />
         </div>
     );

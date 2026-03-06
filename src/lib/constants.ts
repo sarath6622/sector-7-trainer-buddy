@@ -16,6 +16,7 @@ export const NAV_ITEMS: Record<UserRole, Array<{ label: string; href: string; ic
     { label: 'Trainers', href: '/admin/trainers', icon: 'UserCheck' },
     { label: 'Exercises', href: '/admin/exercises', icon: 'Dumbbell' },
     { label: 'Challenges', href: '/admin/challenges', icon: 'Trophy' },
+    { label: 'Announcements', href: '/admin/announcements', icon: 'Megaphone' },
     { label: 'Audit Log', href: '/admin/audit-log', icon: 'ScrollText' },
   ],
   TRAINER: [
@@ -33,6 +34,7 @@ export const NAV_ITEMS: Record<UserRole, Array<{ label: string; href: string; ic
     { label: 'Exercises', href: '/client/exercises', icon: 'Library' },
     { label: 'Habits', href: '/client/habits', icon: 'Heart' },
     { label: 'Community', href: '/client/community', icon: 'Users' },
+    { label: 'Messages', href: '/client/messages', icon: 'MessageSquare' },
     { label: 'Profile', href: '/client/profile', icon: 'User' },
   ],
 };

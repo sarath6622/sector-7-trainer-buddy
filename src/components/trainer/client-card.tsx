@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dumbbell, Flame, Target } from 'lucide-react';
+import { Dumbbell, Flame, Target, MessageSquare } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { TRAINER_SPECIALTY_LABELS } from '@/lib/constants';
 import type { TrainerSpecialty } from '@/generated/prisma/enums';
@@ -19,6 +19,7 @@ interface ClientCardProps {
     profileCompleted?: boolean;
     onView: (clientProfileId: string) => void;
     onAssignWorkout?: (clientProfileId: string) => void;
+    onMessage?: (clientProfileId: string, name?: string | null) => void;
 }
 
 // Summary card for a single mapped client — used in the trainer Clients page grid
@@ -32,6 +33,7 @@ export function ClientCard({
     profileCompleted = false,
     onView,
     onAssignWorkout,
+    onMessage,
 }: ClientCardProps) {
     const lastWorkoutLabel = lastWorkout
         ? formatDistanceToNow(new Date(lastWorkout.date), { addSuffix: true })
@@ -91,6 +93,20 @@ export function ClientCard({
                         }}
                     >
                         Assign Workout
+                    </Button>
+                )}
+                {onMessage && (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="w-full h-7 text-xs gap-1"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onMessage(clientProfileId, name);
+                        }}
+                    >
+                        <MessageSquare className="h-3 w-3" />
+                        Message
                     </Button>
                 )}
             </CardContent>

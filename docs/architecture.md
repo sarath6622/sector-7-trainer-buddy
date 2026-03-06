@@ -21,7 +21,7 @@ Browser / Mobile PWA
   │     ├── (dashboard)/     — shared shell layout
   │     │     ├── admin/     — ADMIN only (dashboard, users, trainers, exercises, challenges)
   │     │     ├── trainer/   — TRAINER only (dashboard, clients, workouts, exercises, profile, schedule)
-  │     │     └── client/    — CLIENT only (dashboard, workouts, exercises, habits, community, profile)
+  │     │     └── client/    — CLIENT only (dashboard, workouts, exercises, habits, community, messages, profile)
   │     ├── api/
   │     │     ├── auth/[...nextauth]/  — NextAuth.js handler
   │     │     ├── pusher/auth/         — Pusher channel authorization
@@ -33,7 +33,8 @@ Browser / Mobile PWA
   │     ├── init.ts           — context, procedure builders
   │     └── routers/          — auth, user, exercise, workout,
   │                              notification, trainer, profile,
-  │                              habit, challenge
+  │                              habit, challenge, announcement,
+  │                              achievement, message
   │
   ├── Service Layer (src/server/services/)
   │     ├── notification.service.ts  — triple-channel delivery
@@ -42,13 +43,34 @@ Browser / Mobile PWA
   │
   ├── Data Layer
   │     ├── src/lib/db.ts     — Prisma singleton (adapter-pg)
-  │     └── prisma/schema.prisma  — 19 models
+  │     └── prisma/schema.prisma  — 23 models
   │
-  └── Client State (src/stores/)
-        ├── use-notification-store.ts  — unread count + list
-        └── use-sidebar-store.ts       — sidebar open/closed
+  ├── Client State (src/stores/)
+  │     ├── use-notification-store.ts  — unread count + list
+  │     ├── use-sidebar-store.ts       — sidebar open/closed
+  │     └── use-offline-store.ts       — offline queue count + sync state
+  │
+  └── Offline Layer
+        ├── src/lib/indexed-db.ts      — IDB schema + typed CRUD (pendingWorkouts, exerciseCache)
+        └── src/hooks/use-offline-sync.ts — queue flush logic + OfflineSyncMounter
 ```
 
+
+---
+
+## Offline Mode Architecture
+
+IndexedDB (via `idb`) is the client-side persistence layer for the offline mutation queue.
+
+| Layer | File | Role |
+|-------|------|------|
+| IDB access | `src/lib/indexed-db.ts` | Schema, typed CRUD for `pendingWorkouts` + `exerciseCache` stores |
+| Sync state | `src/stores/use-offline-store.ts` | Zustand: pendingCount, isSyncing, lastSyncAt |
+| Sync logic | `src/hooks/use-offline-sync.ts` | Flushes IDB queue via raw tRPC client on reconnect; stop-on-first-error |
+| UI | `src/components/shared/offline-banner.tsx` | Red/amber sticky banner in dashboard shell |
+| Workbox | `next.config.ts` runtimeCaching | NetworkFirst cache for `exercise.list` API (24 h TTL) |
+
+**Offline workout flow:** `WorkoutLogger.onSubmit` detects `!isOnline` → enqueues to IDB → `useOfflineSync` drains on reconnect via `trpcClient.workout.log.mutate` / `.complete.mutate`.
 
 ---
 

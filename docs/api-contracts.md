@@ -148,7 +148,44 @@ Types: `HabitType = WATER | SLEEP | STEPS | PROTEIN | CALORIES | CUSTOM`
 |-----------|------|------|-------|--------|
 | `auditLog.list` | query | admin | `{ userId?, action?, entity?, dateFrom?, dateTo?, page?, limit? }` | `{ logs, total, page, totalPages }` — logs include actor `user` details; `action` is a prefix-match (e.g. `USER_`, `CLIENT_`, `CHALLENGE_`) |
 
-Action values written by the platform: `USER_CREATE`, `USER_STATUS_UPDATE`, `USER_DEACTIVATE`, `CLIENT_ASSIGN`, `CLIENT_UNASSIGN`, `CHALLENGE_ACTIVATE`, `CHALLENGE_CANCEL`
+Action values written by the platform: `USER_CREATE`, `USER_STATUS_UPDATE`, `USER_DEACTIVATE`, `CLIENT_ASSIGN`, `CLIENT_UNASSIGN`, `CHALLENGE_ACTIVATE`, `CHALLENGE_CANCEL`, `ANNOUNCEMENT_CREATE`, `ANNOUNCEMENT_DELETE`
+
+---
+
+### `announcement` router
+
+| Procedure | Type | Auth | Input | Output |
+|-----------|------|------|-------|--------|
+| `announcement.list` | query | protected | `{ limit?: 1–100 (default 20), cursor?: string }` | `{ announcements[], nextCursor? }` — sorted `isPinned desc, createdAt desc`; includes `author: { name, image }` |
+| `announcement.listAll` | query | admin | — | `Announcement[]` — all announcements, same sort order |
+| `announcement.create` | mutation | admin | `{ title: max200, body: min1, isPinned?: boolean }` | `Announcement` with author; fires bulk `SYSTEM_ANNOUNCEMENT` notification to all ACTIVE users fire-and-forget; audits `ANNOUNCEMENT_CREATE` |
+| `announcement.pin` | mutation | admin | `{ id }` | Updated `Announcement`; throws `NOT_FOUND` if missing |
+| `announcement.unpin` | mutation | admin | `{ id }` | Updated `Announcement`; throws `NOT_FOUND` if missing |
+| `announcement.delete` | mutation | admin | `{ id }` | `{ success: true }`; throws `NOT_FOUND` if missing; audits `ANNOUNCEMENT_DELETE` |
+
+---
+
+### `achievement` router
+
+| Procedure | Type | Auth | Input | Output |
+|-----------|------|------|-------|--------|
+| `achievement.list` | query | client | — | `AchievementBadge[]` — caller's earned badges sorted `earnedAt desc`; each badge includes `{ id, type, earnedAt, emoji, title, description }` |
+| `achievement.getAll` | query | trainer | `{ userId: string }` | `AchievementBadge[]` — target user's earned badges with same shape |
+
+`AchievementType` values: `FIRST_WORKOUT`, `STREAK_7`, `STREAK_30`, `STREAK_100`, `WORKOUTS_10`, `WORKOUTS_50`, `WORKOUTS_100`
+
+---
+
+### `message` router
+
+| Procedure | Type | Auth | Input | Output |
+|-----------|------|------|-------|--------|
+| `message.getOrCreateConversation` | mutation | trainer | `{ clientProfileId }` | `Conversation` with client user info; throws `NOT_FOUND` if no trainer profile, `FORBIDDEN` if client not actively mapped |
+| `message.listConversations` | query | protected | — | `Conversation[]` sorted `lastMessageAt desc`; TRAINER sees client threads, CLIENT sees trainer threads; each includes last message preview + `_count.messages` (unread for caller) |
+| `message.getThread` | query | protected | `{ conversationId, limit?: 1–50 (default 30), cursor? }` | `{ messages[], nextCursor? }` — newest-first; each message includes `sender: { name, image }`; throws `FORBIDDEN` for non-participants |
+| `message.send` | mutation | protected | `{ conversationId, body: 1–2000 chars }` | Created `Message`; fires `TRAINER_MESSAGE` notification to receiver fire-and-forget; updates `conversation.lastMessageAt` |
+| `message.markRead` | mutation | protected | `{ conversationId }` | `{ count: number }` — bulk marks caller's unread messages in thread as read |
+| `message.unreadCount` | query | protected | — | `number` — total unread messages across all conversations for caller |
 
 ---
 

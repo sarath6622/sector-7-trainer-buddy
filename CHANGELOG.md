@@ -9,6 +9,47 @@ AI assistants: add entries under `[Unreleased]` for every modification per CLAUD
 
 ## [Unreleased]
 
+### Added (Sprint 18 — In-App Trainer-Client Messaging)
+- `prisma/schema.prisma` — added `Conversation` model (`@@unique([trainerId, clientId])` — one thread per pair), `Message` model (`senderId + receiverId → User.id` for O(1) unread queries), back-relations on `TrainerProfile`, `ClientProfile`, and `User` (`sentMessages`, `receivedMessages`); schema synced with `prisma db push` (`prisma/schema.prisma`)
+- `src/server/trpc/routers/message.ts` — `messageRouter` with 6 procedures: `getOrCreateConversation` (`trainerProcedure`, upserts thread + verifies active mapping), `listConversations` (`protectedProcedure`, returns trainer or client threads based on role + last message preview + per-conversation unread count), `getThread` (`protectedProcedure`, cursor-paginated newest-first + `assertParticipant` guard), `send` (`protectedProcedure`, creates message + updates `lastMessageAt` + fires `TRAINER_MESSAGE` triple-channel notification fire-and-forget), `markRead` (bulk `updateMany` for caller's unread), `unreadCount` (scalar count for nav badge) (`src/server/trpc/routers/message.ts`)
+- `src/components/messages/message-sheet.tsx` — right-side Sheet (`sm:max-w-md`) shared by both entry points; trainer path calls `getOrCreateConversation` on open, client path accepts `conversationId` directly; polls `getThread` every 3 s while open for near-real-time updates; calls `markRead` on mount; chat bubble layout with avatar, rounded bubbles, timestamps; Enter to send (`src/components/messages/message-sheet.tsx`)
+- `src/app/(dashboard)/client/messages/page.tsx` — client inbox listing all trainer conversations: avatar + name + last message preview + unread badge + relative timestamp; click opens `MessageSheet`; empty state with instructions (`src/app/(dashboard)/client/messages/page.tsx`)
+- 18 unit tests covering all 6 router procedures including happy paths, FORBIDDEN non-participant, NOT_FOUND, UNAUTHORIZED, cursor pagination, and zero-unread edge cases (`src/server/trpc/routers/__tests__/message.test.ts`)
+
+### Changed (Sprint 18 — In-App Trainer-Client Messaging)
+- `src/server/trpc/router.ts` — registered `messageRouter` in `appRouter` (`src/server/trpc/router.ts`)
+- `src/lib/constants.ts` — added `{ label: 'Messages', href: '/client/messages', icon: 'MessageSquare' }` to CLIENT nav between Community and Profile (`src/lib/constants.ts`)
+- `src/components/layout/sidebar.tsx` — added `MessageSquare` to lucide-react imports and `ICON_MAP` (`src/components/layout/sidebar.tsx`)
+- `src/components/trainer/client-card.tsx` — added `onMessage?: (clientProfileId, name?) => void` prop + "Message" ghost button below "Assign Workout" with `e.stopPropagation()` (`src/components/trainer/client-card.tsx`)
+- `src/app/(dashboard)/trainer/clients/page.tsx` — added `messagingClient` state, wired `onMessage` on `ClientCard`, rendered `MessageSheet` (`src/app/(dashboard)/trainer/clients/page.tsx`)
+
+### Added (Sprint 16 — Offline Mode)
+- `src/lib/indexed-db.ts` — IndexedDB schema and typed accessor functions using `idb`; two object stores: `pendingWorkouts` (offline mutation queue keyed by client UUID) and `exerciseCache` (offline exercise search cache with name index) (`src/lib/indexed-db.ts`)
+- `src/stores/use-offline-store.ts` — Zustand store tracking `pendingCount`, `isSyncing`, and `lastSyncAt` for offline UI state; `decrementPendingCount` clamps at 0 (`src/stores/use-offline-store.ts`)
+- `src/hooks/use-offline-sync.ts` — bootstraps `pendingCount` from IndexedDB on mount; drains the queue via the raw tRPC client in FIFO order on reconnect; stops on first error so failed items remain for the next retry; exports `OfflineSyncMounter` wrapper component (`src/hooks/use-offline-sync.ts`)
+- `src/components/shared/offline-banner.tsx` — sticky dashboard banner: red when offline (with pending count), amber "Syncing…" when flushing, hidden when online+synced; uses `WifiOff` / `Loader2` from lucide-react (`src/components/shared/offline-banner.tsx`)
+- Unit tests — 8 cases for `useOfflineStore` and 7 cases for `useOfflineSync` (bootstrap, log flush, complete flush, empty queue, isSyncing guard, stop-on-error, partial flush) (`src/stores/__tests__/use-offline-store.test.ts`, `src/hooks/__tests__/use-offline-sync.test.ts`)
+
+### Changed (Sprint 16 — Offline Mode)
+- `WorkoutLogger.onSubmit` detects `!isOnline` and persists the workout to the IndexedDB queue with a "Workout saved offline" toast instead of calling tRPC; submit button shows `WifiOff` icon and "Save Offline" label when offline; exercise data is cached in IndexedDB via `useEffect` on every successful `exercise.list` fetch (`src/components/workouts/workout-logger.tsx`)
+- Dashboard layout mounts `OfflineSyncMounter` (renders null) and `OfflineBanner` at the top of the content column (`src/app/(dashboard)/layout.tsx`)
+- `next.config.ts` — added Workbox `runtimeCaching` with `NetworkFirst` strategy for `/api/trpc/exercise.list` (5 s network timeout, 24 h cache TTL) so exercise search works offline (`next.config.ts`)
+
+### Added (Sprint 17 — Community Announcements + Achievements)
+- `src/server/trpc/routers/announcement.ts` — `announcementRouter` with 5 procedures: `list` (cursor-paginated, sorted pinned-first; `protectedProcedure`), `listAll` (admin management view, no pagination), `create` (creates announcement + broadcasts `SYSTEM_ANNOUNCEMENT` notification to all ACTIVE users fire-and-forget + audits), `pin`/`unpin` (toggle `isPinned`), `delete` (hard delete + audit `ANNOUNCEMENT_DELETE`); all mutating procedures are `adminProcedure` (`src/server/trpc/routers/announcement.ts`)
+- `src/server/trpc/routers/achievement.ts` — `achievementRouter` with `list` (`clientProcedure`, returns caller's badges with merged display metadata) and `getAll` (`trainerProcedure`, trainer views any user's badges); exports `awardAchievement(db, userId, type)` idempotent helper that creates a `UserAchievement` row and fires an `ACHIEVEMENT` notification only if the badge is not already earned (`src/server/trpc/routers/achievement.ts`)
+- `Announcement` and `UserAchievement` models added to Prisma schema; `AchievementType` enum (7 values: `FIRST_WORKOUT`, `STREAK_7`, `STREAK_30`, `STREAK_100`, `WORKOUTS_10`, `WORKOUTS_50`, `WORKOUTS_100`); back-relations added to `User`; schema synced with `prisma db push` (`prisma/schema.prisma`)
+- Admin Announcements page (`/admin/announcements`) — `PageHeader` + `CreateAnnouncementDialog` (title Input, body Textarea, isPinned Switch); list of `AnnouncementCard`s with Pin/Unpin toggle and `AlertDialog`-confirmed delete; Megaphone icon in admin sidebar (`src/app/(dashboard)/admin/announcements/page.tsx`)
+- Client Community page — added `AnnouncementsFeed` section (above challenges) showing paginated pinned-first announcements with `formatDistanceToNow` timestamps; added `MyAchievements` section (below challenges) showing badge grid with emoji + title + earnedAt date; original challenges section preserved unchanged (`src/app/(dashboard)/client/community/page.tsx`)
+- 13 unit tests for `announcement` router covering `list` (pagination cursor, UNAUTHORIZED), `create` (happy path + audit, FORBIDDEN for CLIENT/TRAINER), `pin`/`unpin` (happy path, NOT_FOUND), `delete` (happy path + audit, NOT_FOUND, FORBIDDEN for CLIENT) (`src/server/trpc/routers/__tests__/announcement.test.ts`)
+- 7 unit tests for `awardAchievement` (creates badge + notification when new; skips both when already earned) and `achievement.list` (metadata merge, empty array, UNAUTHORIZED) and `achievement.getAll` (TRAINER happy path, FORBIDDEN for CLIENT) (`src/server/trpc/routers/__tests__/achievement.test.ts`)
+
+### Changed (Sprint 17 — Community Announcements + Achievements)
+- `workout.ts` — replaced `checkAndSendStreakNotification` with `checkAndAwardAchievements(db, clientProfileId, userId)`: runs streak + total workout count in parallel after each log/complete and calls `awardAchievement` for all applicable milestones using `>=` thresholds (handles batch offline syncs); `FIRST_WORKOUT` uses `=== 1` to fire exactly once (`src/server/trpc/routers/workout.ts`)
+- `src/server/trpc/router.ts` — registered `announcementRouter` and `achievementRouter` in `appRouter` (`src/server/trpc/router.ts`)
+- `src/lib/constants.ts` — added `{ label: 'Announcements', href: '/admin/announcements', icon: 'Megaphone' }` to ADMIN nav between Challenges and Audit Log (`src/lib/constants.ts`)
+- `src/components/layout/sidebar.tsx` — added `Megaphone` to `ICON_MAP` and lucide-react imports (`src/components/layout/sidebar.tsx`)
+
 ### Added (Sprint 15 — Workout Calendar)
 - `workout.getScheduled` `clientProcedure` — returns workouts in a date range for the calendar view; CLIENT sees only their own logs, TRAINER sees all active-mapped clients' workouts with `clientName`/`clientImage` (`src/server/trpc/routers/workout.ts`)
 - `WorkoutCalendar` shared component — month grid calendar built with date-fns; colour-coded chips by status (ASSIGNED=blue, IN_PROGRESS=yellow, COMPLETED=green, SKIPPED=gray); prev/next month nav; status legend; `onWorkoutClick` + `showClientName` props (`src/components/workouts/workout-calendar.tsx`)

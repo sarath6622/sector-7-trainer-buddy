@@ -15,6 +15,8 @@ import {
   TrendingUp,
   ChevronLeft,
   ScrollText,
+  Megaphone,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NAV_ITEMS, APP_NAME } from '@/lib/constants';
@@ -31,6 +33,8 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Heart,
   TrendingUp,
   ScrollText,
+  Megaphone,
+  MessageSquare,
 };
 
 interface SidebarProps {

@@ -201,3 +201,70 @@ Trainer submits /trainer/profile form:
     → profileCompleted flag flips to true — Admin Users page Profile column shows "Complete"
 ```
 
+
+---
+
+## 13. Offline Workout Logging Flow
+
+```
+WorkoutLogger.onSubmit() detects !isOnline
+  → enqueuePendingWorkout({ id: crypto.randomUUID(), type: 'log'|'complete', queuedAt, payload })
+      → IndexedDB[pendingWorkouts].put(item)
+  → useOfflineStore.incrementPendingCount()
+  → toast "Workout saved offline. It will sync when you reconnect."
+  → form closes
+
+[Network restored]
+useOfflineSync (mounted in DashboardLayout via OfflineSyncMounter) detects isOnline === true
+  → getPendingWorkouts() from IndexedDB → sorted by queuedAt ASC
+  → setIsSyncing(true) → OfflineBanner shows amber "Syncing N workouts…"
+  → For each pending item (sequential, stop-on-first-error):
+      item.type === 'log'      → trpcClient.workout.log.mutate(payload)
+      item.type === 'complete' → trpcClient.workout.complete.mutate(payload)
+      on success               → removePendingWorkout(id), decrementPendingCount()
+      on failure               → break loop; item remains in queue for next reconnect
+  → setIsSyncing(false), setLastSyncAt(Date.now())
+  → OfflineBanner returns null (hidden)
+```
+
+
+---
+
+## 14. Announcement Broadcast Flow
+
+```
+Admin fills CreateAnnouncementDialog → trpc.announcement.create({ title, body, isPinned })
+  → db.announcement.create({ title, body, isPinned, createdBy: adminId })
+  → db.user.findMany({ where: { status: 'ACTIVE' } })  [fire-and-forget chain]
+      → NotificationService.sendBulk(userIds, { type: 'SYSTEM_ANNOUNCEMENT', title, message: body })
+          → db.notification.createMany (in-app)
+          → Pusher trigger per user (real-time)
+          → FCM send per user with token (push)
+  → writeAudit(db, adminId, 'ANNOUNCEMENT_CREATE', 'Announcement', announcement.id)
+  → returns Announcement to UI → queryClient invalidates announcement.listAll
+```
+
+---
+
+## 15. Achievement Award Flow
+
+```
+workout.log or workout.complete mutation completes successfully
+  → checkAndAwardAchievements(db, clientProfileId, userId)
+      → Promise.all([WorkoutService.calculateStreak(clientProfileId), WorkoutService.getTotalWorkouts(clientProfileId)])
+      → For each applicable threshold (all fire-and-forget / catch(console.error)):
+          streak >= 7   → awardAchievement(db, userId, 'STREAK_7')
+          streak >= 30  → awardAchievement(db, userId, 'STREAK_30')
+          streak >= 100 → awardAchievement(db, userId, 'STREAK_100')
+          total === 1   → awardAchievement(db, userId, 'FIRST_WORKOUT')
+          total >= 10   → awardAchievement(db, userId, 'WORKOUTS_10')
+          total >= 50   → awardAchievement(db, userId, 'WORKOUTS_50')
+          total >= 100  → awardAchievement(db, userId, 'WORKOUTS_100')
+
+awardAchievement(db, userId, type):
+  → db.userAchievement.findUnique({ where: { userId_type: { userId, type } } })
+  → if existing: return (idempotent — no duplicate rows or notifications)
+  → db.userAchievement.create({ data: { userId, type } })
+  → NotificationService.send({ type: 'ACHIEVEMENT', title: '🏋️ First Workout!', message: '...' })
+      → in-app notification + Pusher real-time + FCM push
+```

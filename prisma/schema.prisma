@@ -92,6 +92,10 @@ model User {
   leaderboardEntries      LeaderboardEntry[]
   challengeParticipations ChallengeParticipant[]
   auditLogs               AuditLog[]
+  achievements            UserAchievement[]
+  announcements           Announcement[]         @relation("AnnouncementAuthor")
+  sentMessages            Message[]              @relation("MessageSender")
+  receivedMessages        Message[]              @relation("MessageReceiver")
 
   @@index([email])
   @@index([role])
@@ -132,6 +136,7 @@ model TrainerProfile {
   user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   availabilityBlocks TrainerAvailability[]
   clientMappings     TrainerClientMapping[] @relation("TrainerMappings")
+  conversations      Conversation[]
 
   @@index([userId])
 }
@@ -154,6 +159,7 @@ model ClientProfile {
   trainerMappings TrainerClientMapping[] @relation("ClientMappings")
   workoutLogs     WorkoutLog[]
   habits          Habit[]
+  conversations   Conversation[]
 
   @@index([userId])
 }
@@ -355,6 +361,16 @@ model WorkoutSet {
 // NOTIFICATIONS
 // ============================================================
 
+enum AchievementType {
+  FIRST_WORKOUT
+  STREAK_7
+  STREAK_30
+  STREAK_100
+  WORKOUTS_10
+  WORKOUTS_50
+  WORKOUTS_100
+}
+
 enum NotificationType {
   WORKOUT_REMINDER
   TRAINER_MESSAGE
@@ -496,6 +512,78 @@ model LeaderboardEntry {
 
   @@unique([challengeId, userId])
   @@index([challengeId, score])
+}
+
+// ============================================================
+// COMMUNITY: ANNOUNCEMENTS & ACHIEVEMENTS
+// ============================================================
+
+// Persists each admin-authored gym-wide announcement; pinned items sort first in the feed
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String   @db.Text
+  isPinned  Boolean  @default(false)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author User @relation("AnnouncementAuthor", fields: [createdBy], references: [id])
+
+  @@index([createdAt])
+  @@index([isPinned, createdAt])
+}
+
+// @@unique enforces idempotency — each badge type earned at most once per user
+model UserAchievement {
+  id       String          @id @default(cuid())
+  userId   String
+  type     AchievementType
+  earnedAt DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([userId])
+}
+
+// ============================================================
+// MESSAGING
+// ============================================================
+
+// One conversation thread per trainer-client pair; unique constraint enforces this
+model Conversation {
+  id            String    @id @default(cuid())
+  trainerId     String    // FK → TrainerProfile.id
+  clientId      String    // FK → ClientProfile.id
+  lastMessageAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  trainer  TrainerProfile @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  client   ClientProfile  @relation(fields: [clientId],  references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@unique([trainerId, clientId])
+  @@index([trainerId])
+  @@index([clientId])
+}
+
+model Message {
+  id             String    @id @default(cuid())
+  conversationId String
+  senderId       String    // FK → User.id
+  receiverId     String    // FK → User.id — stored explicitly so unread queries are O(1)
+  body           String    @db.Text
+  isRead         Boolean   @default(false)
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("MessageSender",   fields: [senderId],   references: [id])
+  receiver     User         @relation("MessageReceiver", fields: [receiverId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([receiverId, isRead])
 }
 
 // ============================================================
