@@ -2,37 +2,38 @@
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
-// Replace these values with your actual Firebase config after setup
-// Service workers cannot access process.env, so values must be hardcoded here
+// NEXT_PUBLIC_ vars are intentionally public — safe to embed in this static file.
+// Registered at scope /fcm/ to avoid conflicting with the PWA Workbox SW at /.
 firebase.initializeApp({
-  apiKey: 'REPLACE_WITH_NEXT_PUBLIC_FIREBASE_API_KEY',
-  authDomain: 'REPLACE_WITH_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
-  projectId: 'REPLACE_WITH_NEXT_PUBLIC_FIREBASE_PROJECT_ID',
-  messagingSenderId: 'REPLACE_WITH_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
-  appId: 'REPLACE_WITH_NEXT_PUBLIC_FIREBASE_APP_ID',
+  apiKey: 'AIzaSyB-rWC6abX1r2lzkhSK-UK6dRdxzkvj7Ew',
+  authDomain: 'sector7-fb0ff.firebaseapp.com',
+  projectId: 'sector7-fb0ff',
+  messagingSenderId: '184622370860',
+  appId: '1:184622370860:web:a17a7407a89f06e5b90189',
 });
 
 const messaging = firebase.messaging();
 
+// Background push — app closed or backgrounded
 messaging.onBackgroundMessage((payload) => {
   const { title, body, icon } = payload.notification ?? {};
-
   self.registration.showNotification(title ?? 'Sector 7', {
     body: body ?? 'You have a new notification',
     icon: icon ?? '/icons/icon-192x192.png',
-    badge: '/icons/badge-72x72.png',
+    badge: '/icons/icon-96x96.png',
     tag: payload.data?.type ?? 'default',
     data: payload.data,
   });
 });
 
+// Tap notification → focus or open the app
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.url ?? '/';
+  const url = '/';
   event.waitUntil(
-    clients.matchAll({ type: 'window' }).then((clientList) => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
-        if (client.url === url && 'focus' in client) return client.focus();
+        if ('focus' in client) return client.focus();
       }
       if (clients.openWindow) return clients.openWindow(url);
     }),

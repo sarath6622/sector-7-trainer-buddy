@@ -27,9 +27,33 @@ export class FcmService {
     token: string,
     payload: { title: string; body: string; data?: Record<string, unknown> },
   ) {
-    // TODO: Implement with firebase-admin SDK for production
-    // This requires firebase-admin package and service account credentials
-    console.log(`[FCM] Would send to token ${token.slice(0, 10)}...`, payload);
+    if (!process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
+      console.warn('[FCM] Service account credentials not configured — skipping push');
+      return;
+    }
+
+    const { getMessaging } = await import('firebase-admin/messaging');
+    const { firebaseAdminApp } = await import('@/lib/firebase-admin');
+
+    // FCM data values must all be strings
+    const stringData = payload.data
+      ? Object.fromEntries(
+          Object.entries(payload.data).map(([k, v]) => [k, String(v)]),
+        )
+      : undefined;
+
+    await getMessaging(firebaseAdminApp).send({
+      token,
+      notification: { title: payload.title, body: payload.body },
+      webpush: {
+        notification: {
+          icon: '/icons/icon-192x192.png',
+          badge: '/icons/icon-96x96.png',
+        },
+        fcmOptions: { link: '/' },
+      },
+      data: stringData,
+    });
   }
 
   static async registerToken(userId: string, token: string, device?: string) {
