@@ -14,14 +14,17 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Background push — app closed or backgrounded
+// Background push — app closed or backgrounded.
+// Messages are sent as data-only (no notification field) so the browser never
+// auto-displays anything. We read title/body from payload.data and call
+// showNotification exactly once ourselves.
 messaging.onBackgroundMessage((payload) => {
-  const { title, body, icon } = payload.notification ?? {};
+  const { title, body, type } = payload.data ?? {};
   self.registration.showNotification(title ?? 'Sector 7', {
     body: body ?? 'You have a new notification',
-    icon: icon ?? '/icons/icon-192x192.png',
+    icon: '/icons/icon-192x192.png',
     badge: '/icons/icon-96x96.png',
-    tag: payload.data?.type ?? 'default',
+    tag: type ?? 'default',
     data: payload.data,
   });
 });

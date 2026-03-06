@@ -35,24 +35,24 @@ export class FcmService {
     const { getMessaging } = await import('firebase-admin/messaging');
     const { firebaseAdminApp } = await import('@/lib/firebase-admin');
 
-    // FCM data values must all be strings
-    const stringData = payload.data
-      ? Object.fromEntries(
-          Object.entries(payload.data).map(([k, v]) => [k, String(v)]),
-        )
-      : undefined;
+    // Send as a data-only message so the browser never auto-displays a notification.
+    // The service worker's onBackgroundMessage handler reads these fields and calls
+    // showNotification() itself, giving us exactly one notification per push.
+    // FCM data values must all be strings.
+    const data: Record<string, string> = {
+      title: payload.title,
+      body: payload.body,
+      ...(payload.data
+        ? Object.fromEntries(
+            Object.entries(payload.data).map(([k, v]) => [k, String(v)]),
+          )
+        : {}),
+    };
 
     await getMessaging(firebaseAdminApp).send({
       token,
-      notification: { title: payload.title, body: payload.body },
-      webpush: {
-        notification: {
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-96x96.png',
-        },
-        fcmOptions: { link: '/' },
-      },
-      data: stringData,
+      webpush: { fcmOptions: { link: '/' } },
+      data,
     });
   }
 
