@@ -20,11 +20,50 @@ const messaging = firebase.messaging();
 // showNotification exactly once ourselves.
 messaging.onBackgroundMessage((payload) => {
   const { title, body, type } = payload.data ?? {};
-  self.registration.showNotification(title ?? 'Sector 7', {
-    body: body ?? 'You have a new notification',
+
+  // Per-type display config: emoji prefix on the title and a descriptive subtitle
+  // so the user can tell at a glance what kind of notification it is.
+  const config = {
+    TRAINER_MESSAGE: {
+      prefix: '💬 ',
+      subtitle: 'New message',
+      tag: 'message',
+    },
+    PROGRAM_ASSIGNED: {
+      prefix: '🏋️ ',
+      subtitle: 'Workout update',
+      tag: 'workout',
+    },
+    ACHIEVEMENT: {
+      prefix: '🏆 ',
+      subtitle: 'Achievement unlocked',
+      tag: 'achievement',
+    },
+    SYSTEM_ANNOUNCEMENT: {
+      prefix: '📢 ',
+      subtitle: 'Announcement',
+      tag: 'announcement',
+    },
+  }[type] ?? { prefix: '', subtitle: 'Sector 7', tag: 'default' };
+
+  // For message notifications the title IS the sender name — make that clear.
+  // For everything else, keep the title as-is but add the emoji prefix.
+  const notifTitle = type === 'TRAINER_MESSAGE'
+    ? `${config.prefix}${title ?? 'New message'}`
+    : `${config.prefix}${title ?? 'Sector 7'}`;
+
+  // Body already contains the relevant preview (message text, workout name, etc.)
+  // Prepend a short category label when the body might otherwise feel bare.
+  const notifBody = body
+    ? (type === 'TRAINER_MESSAGE' ? body : `${config.subtitle}: ${body}`)
+    : config.subtitle;
+
+  self.registration.showNotification(notifTitle, {
+    body: notifBody,
     icon: '/icons/icon-192x192.png',
     badge: '/icons/icon-96x96.png',
-    tag: type ?? 'default',
+    tag: config.tag,       // same-type notifications replace each other
+    renotify: true,        // still vibrate/sound even when replacing
     data: payload.data,
   });
 });

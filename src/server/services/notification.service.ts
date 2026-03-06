@@ -32,7 +32,7 @@ export class NotificationService {
     });
 
     // 3. Send push notification via FCM (non-blocking)
-    FcmService.sendToUser(userId, { title, body: message, data }).catch((err) =>
+    FcmService.sendToUser(userId, { title, body: message, data: { ...data, type } }).catch((err) =>
       console.error('FCM send failed:', err),
     );
 
