@@ -8,7 +8,7 @@ import { NotificationBell } from '@/components/notifications/notification-bell';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { OfflineBanner } from '@/components/shared/offline-banner';
 import { OfflineSyncMounter } from '@/hooks/use-offline-sync';
-import { PushNotificationMounter } from '@/hooks/use-push-notifications';
+import { PushNotificationMounter } from '@/components/layout/push-notification-banner';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
