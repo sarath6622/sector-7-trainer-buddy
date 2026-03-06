@@ -12,6 +12,11 @@ firebase.initializeApp({
   appId: '1:184622370860:web:a17a7407a89f06e5b90189',
 });
 
+// Force the new SW version to activate immediately without waiting for all
+// tabs to close, so updated notification formatting takes effect right away.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+
 const messaging = firebase.messaging();
 
 // Background push — app closed or backgrounded.
